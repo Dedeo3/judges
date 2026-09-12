@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {IJudgesVerifier} from "./interfaces/IJudgesVerifier.sol";
 import {NullifierRegistry} from "./NullifierRegistry.sol";
 import {Groth16Verifier} from "./JudgesGroth16Verifier.sol";
+import {JudgesField} from "./libraries/JudgesField.sol";
 
 /// @notice Combines the Phase 5 ZK membership proof with Phase 4's nullifier registry —
 ///         README §9.1's JudgesVerifier.
@@ -20,11 +21,6 @@ import {Groth16Verifier} from "./JudgesGroth16Verifier.sol";
 ///      useful, independently tested building block (e.g. for a future smart-account /ERC-4337-
 ///      style flow that validates a live passkey signature per transaction).
 contract JudgesVerifier is IJudgesVerifier {
-    /// @dev BN254 scalar field — the circuit's public inputs live here, so the derived policy
-    ///      hash must be reduced into it to match what the prover fed the circuit.
-    uint256 internal constant FIELD_PRIME =
-        21888242871839275222246405745257275088548364400416034343698204186575808495617;
-
     Groth16Verifier public immutable zkVerifier;
     NullifierRegistry public immutable nullifierRegistry;
 
@@ -41,7 +37,7 @@ contract JudgesVerifier is IJudgesVerifier {
     ///      bytes (32-byte context ‖ 20-byte address). Byte-oriented on purpose: hashing display
     ///      strings across TS and Solidity is exactly where these two halves silently diverge.
     function policyHashFor(bytes32 contextHash, address wallet) public pure returns (bytes32) {
-        return bytes32(uint256(sha256(abi.encodePacked(contextHash, wallet))) % FIELD_PRIME);
+        return bytes32(JudgesField.policyHash(contextHash, wallet));
     }
 
     /// @inheritdoc IJudgesVerifier

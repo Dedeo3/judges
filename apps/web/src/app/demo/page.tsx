@@ -3,18 +3,10 @@
 import { useState } from "react";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { Judges, type JudgesProof } from "@judges/sdk";
+// Imported for its `window.ethereum` global declaration, kept in one place.
+import "@/lib/wallet";
 
 type Status = { kind: "idle" } | { kind: "success"; message: string } | { kind: "error"; message: string };
-
-type EthereumProvider = {
-  request(args: { method: string; params?: unknown[] }): Promise<unknown>;
-};
-
-declare global {
-  interface Window {
-    ethereum?: EthereumProvider;
-  }
-}
 
 export default function DemoPage() {
   const [label, setLabel] = useState("");
@@ -200,6 +192,22 @@ export default function DemoPage() {
       <button onClick={handleProveMembership} disabled={busy || !wallet}>
         Prove membership (ZK) via SDK
       </button>
+
+      <hr style={{ margin: "32px 0" }} />
+
+      <h2>Phase 7: demo integrations</h2>
+      <p>Three apps, one SDK, three separate nullifier domains — acting in one doesn&apos;t spend your turn in another.</p>
+      <ul>
+        <li>
+          <a href="/demo/dao">Sybil-resistant DAO</a> — one credential, one vote per proposal
+        </li>
+        <li>
+          <a href="/demo/agent">AI agent registry</a> — agents registered only under a verified credential
+        </li>
+        <li>
+          <a href="/demo/faucet">Sybil-resistant faucet</a> — one claim per credential
+        </li>
+      </ul>
 
       {status.kind !== "idle" && (
         <p style={{ marginTop: 24, color: status.kind === "error" ? "crimson" : "green" }}>{status.message}</p>

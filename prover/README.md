@@ -6,6 +6,9 @@ itself — that's verified directly onchain via Monad's native `P256VERIFY` prec
 See the `@dev` comment at the top of `circuits/judges_membership.circom` for the full scoping
 rationale.
 
+> Offline note: `contracts`' `MonadP256Adapter` suite talks to a live Monad RPC (the only way to
+> reach the custom P256VERIFY precompile). Run `SKIP_FORK_TESTS=1 forge test` with no network.
+
 ## Setup (once per machine)
 
 1. Install `circom` (v2.1.6+): https://docs.circom.io/getting-started/installation/

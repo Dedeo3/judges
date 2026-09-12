@@ -28,6 +28,17 @@ contract MonadP256AdapterTest is Test {
     bytes32 constant QY = 0xcaf8508986a24d2f19e90ff5017c6fcd5ac133dffade764b4be538c368e644d4;
 
     function setUp() public {
+        // This is the one suite that genuinely needs network access: Monad's P256VERIFY is a
+        // custom precompile Foundry's local EVM doesn't implement, so the assertions are sent to
+        // a real node (see the contract-level note). Consequence: with no egress, `setUp` fails
+        // with a DNS error that looks exactly like a broken contract. `SKIP_FORK_TESTS=1` opts
+        // out explicitly for offline or network-restricted environments -- deliberately opt-OUT,
+        // since silently skipping would mean nobody notices the day it stops being exercised.
+        if (vm.envOr("SKIP_FORK_TESTS", false)) {
+            vm.skip(true);
+            return;
+        }
+
         // Self-forking (rather than requiring `--fork-url` on the command line) so plain
         // `forge test` works in CI with no extra flags. MONAD_TESTNET_RPC_URL is a public,
         // unauthenticated RPC -- no secret needed -- but defaults here too in case the env
