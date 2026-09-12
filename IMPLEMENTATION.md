@@ -79,19 +79,22 @@ Goal: working passkey registration + authentication, server-validated, no wallet
 
 **Backend (`apps/web/src/app/api/webauthn/**`, deployed as Vercel Functions)**
 
-- [ ] Choose WebAuthn library (`@simplewebauthn/server` recommended over hand-rolled parsing).
-- [ ] `credentials` table (README §13 schema) on Neon: `id, credential_id, credential_public_key, rp_id, sign_count, transports, created_at, status`.
-- [ ] `POST /api/webauthn/register/options` — generate registration challenge, store in Upstash Redis with short TTL.
-- [ ] `POST /api/webauthn/register/verify` — verify attestation, persist credential to Neon.
-- [ ] `POST /api/webauthn/auth/options` — generate auth challenge.
-- [ ] `POST /api/webauthn/auth/verify` — full validation: origin, rpId, challenge match, one-time consumption, signature, user-verification flag, signature counter.
-- [ ] Reject list implemented exactly per README §7.3 and §19 (wrong challenge, wrong RP/origin, invalid client data type, invalid authenticator data, invalid signature, unexpected UV state, stale/replayed challenge, malformed credential).
+- [x] Choose WebAuthn library (`@simplewebauthn/server`, discoverable/resident-key credentials so auth doesn't need a username lookup).
+- [x] `credentials` table (README §13 schema) on Neon: `id, credential_public_key, user_id, rp_id, sign_count, transports, status, created_at` — migration written (`apps/web/migrations/0001_create_credentials.sql`, run via `pnpm --filter @judges/web db:migrate`), not yet applied to a real Neon instance.
+- [x] `POST /api/webauthn/register/options` — generate registration challenge, store in Upstash Redis with short TTL.
+- [x] `POST /api/webauthn/register/verify` — verify attestation, persist credential to Neon.
+- [x] `POST /api/webauthn/auth/options` — generate auth challenge (no `allowCredentials`; relies on discoverable credentials).
+- [x] `POST /api/webauthn/auth/verify` — full validation via the library (origin, rpId, challenge, signature, UV flag) plus our own checks (unknown/revoked credential, sign-counter regression).
+- [x] Reject list per README §7.3/§19: wrong challenge/origin/rpId/signature → library rejects; stale/replayed challenge → Redis `GETDEL` makes the challenge single-use, so a second submission finds nothing and is rejected; unknown credential → explicit lookup check; malformed request body → explicit 400 before touching WebAuthn logic.
 
 **Frontend (`apps/web`)**
 
-- [ ] Minimal page calling `navigator.credentials.create()` / `.get()` against the above endpoints.
+- [x] `/demo` page (`apps/web/src/app/demo/page.tsx`) calling `startRegistration()` / `startAuthentication()` (`@simplewebauthn/browser`) against the above endpoints.
 
 **Acceptance test** (README §18 Phase 1): phone biometric/PIN → WebAuthn assertion → server returns valid, and a replayed assertion is rejected.
+
+**Verified so far**: full workspace `typecheck`/`build`/`lint` pass; `/demo` renders and calls the API; hitting an endpoint with no Upstash/Neon credentials configured fails loudly with a clear `Missing required env var` error instead of crashing the server — confirmed live via a local dev server.
+**Not yet verified**: the actual WebAuthn ceremony end-to-end (needs a real platform authenticator — Touch ID / Windows Hello / a phone — which an automated browser can't provide) and the Neon/Upstash-backed persistence (needs real free-tier project credentials, not yet provisioned). Do this manually once those accounts exist, before checking this phase off as done.
 
 ---
 
@@ -99,13 +102,18 @@ Goal: working passkey registration + authentication, server-validated, no wallet
 
 Goal: bind a WebAuthn credential to an EVM wallet address, replay- and cross-domain-safe.
 
-- [ ] Define binding statement (README §10): `wallet W + credential C + domain D`, signed by both the wallet (EIP-191/712 signature) and proven via a fresh WebAuthn ceremony.
-- [ ] `applications` table: `id, name, domain, policy_hash, created_at`.
-- [ ] `POST /api/bindings` — accepts wallet signature + WebAuthn assertion over the same binding challenge (anti-replay nonce, short expiry).
-- [ ] Enforce: one active credential-to-wallet binding per domain unless explicit re-bind flow is invoked.
-- [ ] Use `viem` for wallet signature verification.
+- [x] Define binding statement (README §10): `wallet W + credential C + domain D + nonce + expiry`, signed by both the wallet (EIP-191 `personal_sign`) and proven via a fresh WebAuthn ceremony whose challenge is `sha256(bindingMessage)` — so the same assertion can't be replayed as a login or reused for a different wallet/domain/nonce.
+- [x] `applications` table: `id, name, domain, policy_hash, created_at` (migration `0002_wallet_binding.sql`, seeds a `judges-demo` domain for local testing).
+- [x] `bindings` table: `id, credential_id, wallet_address, domain, created_at, revoked_at`, with partial unique indexes on `(domain, credential_id)` and `(domain, wallet_address)` where `revoked_at is null` — DB-enforced one-active-binding-per-domain, not just an application-level check.
+- [x] Two-step endpoint (a single `POST` can't work — the client needs the challenge/message before it can produce a signature and assertion): `POST /api/bindings/challenge` (issues the binding statement + WebAuthn options, stores pending state in Upstash keyed by `sessionId`, single-use via `GETDEL`) and `POST /api/bindings/verify` (checks wallet signature, WebAuthn assertion, and the uniqueness constraint before inserting).
+- [x] Enforce: one active credential-to-wallet binding per domain — a conflicting bind returns `already_bound`; an identical repeat bind is idempotent. Explicit re-bind/revoke flow is not built (out of scope for the hackathon MVP; would need a `revoked_at` update path).
+- [x] Use `viem`'s `verifyMessage` (pure EOA signature recovery, no RPC client needed) for wallet signature verification.
+- Refactored `packages/webauthn`: extracted `verifyAssertion` (challenge-agnostic core) and `generateAssertionOptions` (storage-agnostic options generator) out of `verifyAuthentication`/`createAuthenticationOptions` so Phase 1 login and Phase 2 binding share identical signature/counter verification instead of duplicating it.
 
 **Acceptance test**: wallet A + credential A → valid; wallet B + credential A → rejected unless explicitly re-bound.
+
+**Verified so far**: full workspace `typecheck`/`lint`/`build` pass; `/demo`'s new "Wallet binding" section renders; clicking "Connect wallet" with no injected wallet fails cleanly (no crash); hitting `/api/bindings/challenge` directly reaches `createBindingChallenge` → `bindingStore` and fails loudly on the missing `UPSTASH_REDIS_REST_URL`, confirming the code path is wired correctly up to where real credentials are needed.
+**Not yet verified**: the actual two-proof binding ceremony end-to-end (needs a real injected wallet extension + a real passkey + live Neon/Upstash), and the DB-level uniqueness enforcement against a real Postgres instance. Do this manually once Neon/Upstash are provisioned and the migrations are applied.
 
 ---
 
@@ -113,19 +121,25 @@ Goal: bind a WebAuthn credential to an EVM wallet address, replay- and cross-dom
 
 Goal: verify a real P-256 signature onchain using Monad's native `P256VERIFY` (EIP-7951).
 
-- [ ] `contracts/P256Verifier.sol` — thin wrapper matching the precompile's expected calldata/return format.
-- [ ] `contracts/MonadP256Adapter.sol` — isolates the raw precompile address/calldata encoding so `JudgesVerifier.sol` never touches it directly.
-- [ ] Foundry tests against a forked Monad Testnet RPC (`forge test --fork-url $MONAD_TESTNET_RPC_URL`).
-- [ ] Confirm current `P256VERIFY` precompile address/gas cost from Monad's changelog before hardcoding it — don't trust a stale value from this doc; it must be re-checked at implementation time.
+- [x] `contracts/src/libraries/P256Verifier.sol` — pure `staticcall`-based verify library, precompile address passed in by the caller (chain-agnostic, per EIP-7951's `hash‖r‖s‖qx‖qy` 160-byte big-endian layout).
+- [x] `contracts/src/interfaces/IP256Verifier.sol` — the interface `JudgesVerifier.sol` (Phase 9/§9.1) will consume, decoupled from any specific chain.
+- [x] `contracts/src/MonadP256Adapter.sol` — the one Monad-specific file: hardcodes precompile address `0x0100` and calls into the library. Confirmed live against Monad's own docs (address `0x0100`, 6900 gas, exact input/output format) rather than trusting a stale guess — see sources below.
+- [x] Foundry tests forked against the real Monad Testnet RPC — the test self-forks in `setUp()` via `vm.createSelectFork` (defaulting to the public `MONAD_TESTNET_RPC_URL`), so plain `forge test` works with no CLI flags or CI secrets needed. 6/6 passing.
 
-**Acceptance test** (README §18 Phase 3):
+**Important finding — fork-test limitation**: `--fork-url` replays cached remote *state* through Foundry's own local EVM (revm); it does not proxy opcode execution to the real node. Monad's `P256VERIFY` is a custom precompile revm has no built-in knowledge of, so calling `adapter.verify(...)` directly inside a forked test silently hits an "empty account" at `0x0100` and **always returns false**, regardless of whether the vector is valid — this is a testing-harness gap, not a contract bug. Confirmed by cross-checking: a direct `cast call` with identical calldata against the live RPC returns `1`. The tests instead use the `vm.rpc("eth_call", ...)` cheatcode to send the check straight to the real forked RPC endpoint, hitting the actual on-chain precompile. **This matters for Phase 9** (`JudgesVerifier.sol`, which calls into `MonadP256Adapter`): any test that needs a real true/false answer from P256 verification must either use `vm.rpc` the same way, or `vm.etch` a mock contract at `0x0100` for tests that only care about surrounding logic (nullifier checks, event emission) and shouldn't depend on network access.
+
+**Acceptance test** (README §18 Phase 3) — verified live against Monad Testnet:
 
 ```text
-valid P256 signature -> true
-modified message      -> false
-modified r/s          -> false
-wrong key             -> false
+valid P256 signature -> true   [PASS]
+modified message      -> false [PASS]
+modified r/s          -> false [PASS]
+wrong key             -> false [PASS]
 ```
+
+Test vector: a real secp256r1 keypair generated with Node's `crypto` module (prime256v1, SHA-256 digest, IEEE P1363 signature encoding), locally verified with `crypto.verify` before use, and emitted directly into the test file by that same script — no manual hex transcription.
+
+Sources checked at implementation time (2026-09-12): [Monad Precompiles docs](https://docs.monad.xyz/developer-essentials/precompiles) (address `0x0100`, input layout, 6900 gas), [EIP-7951](https://eips.ethereum.org/EIPS/eip-7951).
 
 ---
 
@@ -133,16 +147,22 @@ wrong key             -> false
 
 Goal: deterministic, domain-separated nullifiers; duplicate use rejected onchain.
 
-- [ ] `packages/crypto` — implement `nullifier = H(secret || applicationId || epoch)` and `commitment = Poseidon(credential_secret, credential_public_key, domain_separator)`. Freeze the exact hash/curve choice and cover with unit tests before anything depends on it (README §7.4 flags this explicitly).
-- [ ] `contracts/NullifierRegistry.sol` — `mapping(bytes32 domain => mapping(bytes32 nullifier => bool used))`.
-- [ ] Emit `HumanVerified(domain, nullifier, wallet)` — audit the event for accidental leakage of credential material before merging.
+- [x] `packages/crypto` — frozen construction, covered by 11 vitest unit tests (`pnpm --filter @judges/crypto test`):
+  - `credentialSecret = HMAC-SHA256(JUDGES_DOMAIN_SECRET, credentialId ‖ credentialPublicKey)` reduced into the BN254 scalar field. We never have the WebAuthn private key (non-extractable by design), so this server-held-secret-derived value stands in for README §7.4/§7.5's "credential_secret" — deterministic per credential, unforgeable without `JUDGES_DOMAIN_SECRET`.
+  - `commitment = Poseidon3(credentialSecret, sha256(credentialPublicKey), sha256(domainSeparator))`.
+  - `nullifier = Poseidon3(credentialSecret, sha256(applicationId), sha256(epoch))`, `epoch` defaulting to a fixed value (no rotation policy yet — that's a later policy-engine concern, not Phase 4).
+  - Poseidon (via `poseidon-lite`, the same parameterization `circomlib`/Semaphore use) chosen over keccak/sha256 specifically because Phase 5's ZK circuit must prove "the nullifier is correctly derived" and "the commitment matches" — picking a circuit-unfriendly hash now would force a breaking change later.
+- [x] `contracts/src/NullifierRegistry.sol` — `mapping(bytes32 domain => mapping(bytes32 nullifier => bool used))`, plus a `consume()` entry point restricted to a one-time-settable `verifier` address (an unauthenticated public `consume` would let anyone front-run and burn a nullifier before its rightful owner submits — a griefing vector the README interface sketch doesn't call out but is worth closing now). `setVerifier` is deployer-only and settable exactly once, avoiding a constructor circular dependency with `JudgesVerifier` (Phase 9, not deployed yet).
+- [x] Emits `HumanVerified(domain, nullifier, wallet)` exactly as specified — audited for leakage: only the domain, the opaque nullifier, and the wallet address are emitted, never the credential ID, public key, or secret.
 
-**Acceptance test**:
+**Verified**: `packages/crypto` — 11/11 vitest tests (determinism, cross-domain/cross-credential/cross-epoch distinctness, field-membership). `contracts/test/NullifierRegistry.t.sol` — 7/7 Foundry tests, pure local (no fork needed, no chain dependency): consume marks used + emits event, duplicate in same domain reverts, same nullifier in a different domain succeeds, unauthorized caller rejected, verifier settable only once by the deployer.
+
+**Acceptance test** — all confirmed by the tests above:
 
 ```text
-same domain + same credential -> same nullifier
-same domain + used nullifier  -> rejected
-other domain                  -> different nullifier
+same domain + same credential -> same nullifier   [PASS, vitest]
+same domain + used nullifier  -> rejected          [PASS, forge test]
+other domain                  -> different nullifier [PASS, vitest + forge test]
 ```
 
 ---

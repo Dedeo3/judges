@@ -10,9 +10,10 @@
   "dependencies": {
     "@judges/types": "workspace:*",
     "@simplewebauthn/server": "^11.0.0",
-    "@simplewebauthn/browser": "^11.0.0"
+    "@simplewebauthn/types": "^11.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.6.0"
   }
 }
