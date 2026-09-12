@@ -212,19 +212,18 @@ changed policy  -> proof fails       [PASS]
 
 Goal: `@judges/sdk` hides WebAuthn + P256 + replay protection + nullifiers behind `register()` / `prove()` / `verify()` / `getPolicy()`.
 
-- [ ] `packages/sdk` wraps: challenge creation, browser WebAuthn calls, serialization, proof prep, Monad RPC calls (via `viem`), retries, verification-result normalization.
-- [ ] Ship the exact example shape from README §11/§26:
+- [x] **Fixed a real dependency bug found while starting this phase**: `packages/sdk` was declared depending on `@judges/webauthn` (the *server-only* package, itself depending on `@simplewebauthn/server`) — wrong for a package meant to run in the browser. Swapped for `@simplewebauthn/browser` directly.
+- [x] `packages/sdk` wraps: challenge creation + the browser WebAuthn ceremony (`prove()` calls `/api/webauthn/auth/options` then `startAuthentication`), proof preparation (delegated server-side — see the new `/api/prove` endpoint below, since proof generation needs the credential secret, which never leaves the server), Monad RPC calls (`verify()`/`isNullifierUsed()` via `viem`, using the *caller's* wallet client — the SDK never holds a signer), retries on transient failures (`postJson` — 5xx/429 retried with backoff, 4xx and WebAuthn ceremony failures are not, since a consumed challenge can't be resubmitted), and verification-result normalization (`{ valid, txHash, domain, nullifier }`).
+- [x] Shipped the exact example shape from README §11/§26 (see `docs/integration.md`) — `getPolicy()` not implemented (no real policy engine exists yet, README §26/V2 roadmap; nothing to fetch).
+- [x] **New: `/api/prove`** (`apps/web/src/lib/prove.ts`) — the piece that makes the SDK's `prove()` call meaningful. Verifies a *fresh* WebAuthn assertion (same single-use-challenge path as `/api/webauthn/auth/verify` — this endpoint does not accept a bare `credentialId`, only a live ceremony result, so a caller can't request a proof for a credential they don't control), derives the credential secret server-side, builds the Phase 5 membership witness, and runs `snarkjs.groth16.fullProve` against the *committed* frozen `prover/build/judges_membership_final.zkey`/`.wasm` (resolved via a relative path from `apps/web`, since Vercel's file tracing for a cross-package binary dependency hasn't been configured yet — flagged for Phase 8). Uses `snarkjs.groth16.exportSolidityCallData` to get the correctly-ordered G2 point before ABI-encoding, rather than re-deriving that ordering by hand (a well-known Groth16 footgun).
+- [x] Dogfooded in `/demo`: a "Prove membership (ZK) via SDK" button imports `@judges/sdk` exactly as an external integrator would (not a direct `fetch`) and calls `judges.prove(...)`.
+- [x] Wrote `docs/integration.md`.
+- [x] **Found and fixed while wiring this up**: `apps/web/tsconfig.json`'s `target: "ES2017"` (create-next-app's default) doesn't support BigInt literals, which `packages/crypto` uses — bumped to `ES2020`. Also hit a stale `tsconfig.tsbuildinfo` incremental-cache file masking the fix (deleting it, already gitignored, resolved it) — worth knowing if a target/lib bump ever seems to silently not take effect again.
 
-```ts
-const judges = new Judges({ network: "monad-testnet", appId: "my-dapp" });
-const proof = await judges.prove({ assurance: "user_verified" });
-const result = await judges.verify(proof);
-```
+**Acceptance test** (as originally written): a throwaway script outside the monorepo (or a fresh `apps/demo-agent`) can `npm install` the SDK package and complete a full prove/verify round trip against the deployed testnet contracts.
 
-- [ ] Publish as an installable local package (`pnpm link` or workspace `file:` dependency) so demo apps consume it exactly the way an external integrator would — this is the traction/DX story for the rubric.
-- [ ] Write `docs/integration.md` — must work by itself on a clean machine (Definition of Done requirement).
-
-**Acceptance test**: a throwaway script outside the monorepo (or a fresh `apps/demo-agent`) can `npm install` the SDK package and complete a full prove/verify round trip against the deployed testnet contracts.
+**Verified**: full workspace `typecheck`/`lint`/`build` pass. Live in a local dev server: `/demo`'s new button calls the SDK, which calls the real `/api/webauthn/auth/options` endpoint, retries 3 times (default `maxRetries: 2`) against the expected `Missing required env var: UPSTASH_REDIS_REST_URL` failure, and surfaces a clean error — confirming the SDK's call chain, retry logic, and error propagation are wired correctly up to where real infrastructure is needed. `apps/web` can resolve `prover/build`'s committed wasm/zkey via its relative path (confirmed via a direct filesystem check).
+**Not yet verified** (same blockers as every earlier phase, now compounded): a full `prove()` → `verify()` round trip needs real Neon/Upstash credentials (Phase 1/2), `JudgesVerifier` actually deployed to Monad Testnet (Phase 8), and a real platform authenticator to complete the WebAuthn ceremony (Phase 1). The acceptance test as written can't be satisfied until Phase 8 exists — this phase gets the SDK and its backend as far as they can honestly go before that.
 
 ---
 

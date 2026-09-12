@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
+import { Judges, type JudgesProof } from "@judges/sdk";
 
 type Status = { kind: "idle" } | { kind: "success"; message: string } | { kind: "error"; message: string };
 
@@ -82,6 +83,23 @@ export default function DemoPage() {
     }
   }
 
+  async function handleProveMembership() {
+    setBusy(true);
+    setStatus({ kind: "idle" });
+    try {
+      const judges = new Judges({ network: "monad-testnet", appId: domain });
+      const proof: JudgesProof = await judges.prove({ assurance: "user_verified" });
+      setStatus({
+        kind: "success",
+        message: `ZK proof generated. nullifier ${proof.nullifier.slice(0, 12)}…, domain ${proof.domain.slice(0, 12)}… (onchain verify() needs a deployed JudgesVerifier — Phase 8)`,
+      });
+    } catch (err) {
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Proof generation failed" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleConnectWallet() {
     if (!window.ethereum) {
       setStatus({ kind: "error", message: "No injected wallet found (install MetaMask or similar)" });
@@ -151,6 +169,14 @@ export default function DemoPage() {
           Sign in with passkey
         </button>
       </div>
+
+      <hr style={{ margin: "32px 0" }} />
+
+      <h2>Phase 6: @judges/sdk</h2>
+      <p>Uses the real published SDK package, not a direct fetch — proves via the WebAuthn ceremony above.</p>
+      <button onClick={handleProveMembership} disabled={busy}>
+        Prove membership (ZK) via SDK
+      </button>
 
       <hr style={{ margin: "32px 0" }} />
 

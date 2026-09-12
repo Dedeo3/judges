@@ -204,6 +204,9 @@ importers:
       react-dom:
         specifier: 19.2.8
         version: 19.2.8(react@19.2.8)
+      snarkjs:
+        specifier: ^0.7.5
+        version: 0.7.6
       viem:
         specifier: ^2.21.0
         version: 2.56.3(typescript@5.9.3)(zod@4.6.2)
@@ -260,9 +263,9 @@ importers:
       '@judges/types':
         specifier: workspace:*
         version: link:../types
-      '@judges/webauthn':
-        specifier: workspace:*
-        version: link:../webauthn
+      '@simplewebauthn/browser':
+        specifier: ^11.0.0
+        version: 11.0.0
       viem:
         specifier: ^2.21.0
         version: 2.56.3(typescript@5.9.3)(zod@4.6.2)

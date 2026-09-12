@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@judges/types": "workspace:*",
-    "@judges/webauthn": "workspace:*",
+    "@simplewebauthn/browser": "^11.0.0",
     "viem": "^2.21.0"
   },
   "devDependencies": {
