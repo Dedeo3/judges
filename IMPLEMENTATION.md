@@ -24,7 +24,9 @@ Create the structure from README §16:
 ```text
 judges/
 ├── apps/
-│   ├── web/            # Next.js demo app (landing, /demo, /developers, /playground, /transactions)
+│   ├── web/             # Next.js app — demo pages (landing, /demo, /developers, /playground,
+│   │   │                #   /transactions) AND the backend, as API routes under src/app/api/**
+│   │   └── src/app/api/ #   deployed as Vercel Functions, no separate server process
 │   └── demo-agent/      # AI agent registry demo integration
 ├── packages/
 │   ├── sdk/             # @judges/sdk — TypeScript SDK
@@ -32,40 +34,42 @@ judges/
 │   ├── crypto/          # commitment + nullifier derivation
 │   └── types/           # shared TS types (proof, policy, session)
 ├── contracts/
-│   ├── JudgesVerifier.sol
-│   ├── JudgesRegistry.sol
-│   ├── NullifierRegistry.sol
-│   ├── P256Verifier.sol
-│   ├── MonadP256Adapter.sol
-│   └── interfaces/
+│   ├── src/
+│   │   ├── JudgesVerifier.sol
+│   │   ├── JudgesRegistry.sol
+│   │   ├── NullifierRegistry.sol
+│   │   ├── P256Verifier.sol
+│   │   ├── MonadP256Adapter.sol
+│   │   └── interfaces/
+│   ├── script/
+│   └── test/
 ├── prover/
 │   ├── circuits/
 │   ├── scripts/
-│   └── tests/
-├── server/
-│   ├── src/
-│   ├── migrations/
 │   └── tests/
 ├── docs/
 │   ├── architecture.md
 │   ├── security.md
 │   ├── protocol.md
 │   └── integration.md
-├── docker/
+├── docker/              # optional local Postgres+Redis; prod uses Neon + Upstash
 ├── scripts/
 ├── README.md
 └── package.json           # pnpm workspace root
 ```
 
+> **Hosting decision**: no standalone backend process. `apps/web` is deployed to **Vercel** as one unit — frontend pages + API routes (Vercel Functions). Postgres is **Neon** (serverless HTTP driver, pooled connection string), Redis/session-challenge storage is **Upstash** (REST-based). Both have free tiers sufficient for the hackathon. Local dev can still use `docker/docker-compose.yml` for Postgres+Redis, or point straight at free-tier Neon/Upstash to match prod exactly. This keeps everything deployable on Vercel's free Hobby tier with a single `vercel deploy` — no server to keep alive, no separate host to pay for. One consequence: anything that waits on Monad transaction confirmation must happen client-side (via the SDK/viem in the browser), not inside an API route, since serverless functions have an execution time cap.
+
 **Tasks**
 
-- [ ] `pnpm init` monorepo with workspaces (`apps/*`, `packages/*`, `server`, `contracts` as a Foundry project, `prover`).
-- [ ] Foundry project in `contracts/` (`forge init`), Hardhat not needed unless Foundry can't reach Monad Testnet cleanly — verify RPC compatibility first.
-- [ ] Docker Compose for Postgres + Redis in `docker/`.
-- [ ] Root `.env.example` covering: `MONAD_TESTNET_RPC_URL`, `MONAD_MAINNET_RPC_URL`, `DATABASE_URL`, `REDIS_URL`, `JUDGES_DOMAIN_SECRET`, `RP_ID`, `RP_ORIGIN`.
-- [ ] CI skeleton (GitHub Actions): lint + typecheck + `forge test` + `vitest`/`jest` on every PR.
+- [x] `pnpm init` monorepo with workspaces (`apps/*`, `packages/*`, `contracts` as a Foundry project, `prover`).
+- [x] Foundry project in `contracts/` (`forge init`).
+- [x] Docker Compose for Postgres + Redis in `docker/` (optional local fallback).
+- [x] Root `.env.example` covering: `MONAD_TESTNET_RPC_URL`, `MONAD_MAINNET_RPC_URL`, `DATABASE_URL`/`DATABASE_URL_UNPOOLED` (Neon), `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`, `JUDGES_DOMAIN_SECRET`, `RP_ID`, `RP_ORIGIN`.
+- [x] CI skeleton (GitHub Actions): typecheck + lint + test (Node) + `forge test` (contracts) on every PR.
+- [x] `apps/web` scaffolded (Next.js, TypeScript, Tailwind, App Router) with `/api/health` as the first route.
 
-**Acceptance**: `pnpm install && pnpm build` succeeds from a clean clone; `docker compose up` brings up Postgres + Redis.
+**Acceptance**: `pnpm install && pnpm build` succeeds from a clean clone; `apps/web` runs locally with `pnpm --filter @judges/web dev`; `docker compose -f docker/docker-compose.yml up` brings up Postgres + Redis for local-only dev.
 
 ---
 
@@ -73,14 +77,14 @@ judges/
 
 Goal: working passkey registration + authentication, server-validated, no wallet/chain involved yet.
 
-**Backend (`server/`)**
+**Backend (`apps/web/src/app/api/webauthn/**`, deployed as Vercel Functions)**
 
 - [ ] Choose WebAuthn library (`@simplewebauthn/server` recommended over hand-rolled parsing).
-- [ ] `credentials` table (README §13 schema): `id, credential_id, credential_public_key, rp_id, sign_count, transports, created_at, status`.
-- [ ] `POST /v1/webauthn/register/options` — generate registration challenge, store in Redis with short TTL.
-- [ ] `POST /v1/webauthn/register/verify` — verify attestation, persist credential.
-- [ ] `POST /v1/webauthn/auth/options` — generate auth challenge.
-- [ ] `POST /v1/webauthn/auth/verify` — full validation: origin, rpId, challenge match, one-time consumption, signature, user-verification flag, signature counter.
+- [ ] `credentials` table (README §13 schema) on Neon: `id, credential_id, credential_public_key, rp_id, sign_count, transports, created_at, status`.
+- [ ] `POST /api/webauthn/register/options` — generate registration challenge, store in Upstash Redis with short TTL.
+- [ ] `POST /api/webauthn/register/verify` — verify attestation, persist credential to Neon.
+- [ ] `POST /api/webauthn/auth/options` — generate auth challenge.
+- [ ] `POST /api/webauthn/auth/verify` — full validation: origin, rpId, challenge match, one-time consumption, signature, user-verification flag, signature counter.
 - [ ] Reject list implemented exactly per README §7.3 and §19 (wrong challenge, wrong RP/origin, invalid client data type, invalid authenticator data, invalid signature, unexpected UV state, stale/replayed challenge, malformed credential).
 
 **Frontend (`apps/web`)**
@@ -97,7 +101,7 @@ Goal: bind a WebAuthn credential to an EVM wallet address, replay- and cross-dom
 
 - [ ] Define binding statement (README §10): `wallet W + credential C + domain D`, signed by both the wallet (EIP-191/712 signature) and proven via a fresh WebAuthn ceremony.
 - [ ] `applications` table: `id, name, domain, policy_hash, created_at`.
-- [ ] `POST /v1/bindings` — accepts wallet signature + WebAuthn assertion over the same binding challenge (anti-replay nonce, short expiry).
+- [ ] `POST /api/bindings` — accepts wallet signature + WebAuthn assertion over the same binding challenge (anti-replay nonce, short expiry).
 - [ ] Enforce: one active credential-to-wallet binding per domain unless explicit re-bind flow is invoked.
 - [ ] Use `viem` for wallet signature verification.
 
@@ -200,6 +204,8 @@ Build all three using the same SDK, no bespoke logic per app:
 
 - [ ] Deploy `JudgesVerifier`, `JudgesRegistry`, `NullifierRegistry` (and adapters) to **Monad Testnet** (chain ID `10143`) via Foundry script (`forge script`).
 - [ ] Verify contracts on the Monad Testnet explorer.
+- [ ] Provision free-tier **Neon** (Postgres) and **Upstash** (Redis) projects; set their connection strings as Vercel environment variables for `apps/web`.
+- [ ] `vercel deploy` (or connect the GitHub repo to Vercel for auto-deploy on push) — this is the live product link required for submission.
 - [ ] Point `apps/web`, `apps/demo-agent`, and the SDK's default network config at the deployed testnet addresses.
 - [ ] Record deployed addresses in `docs/architecture.md`.
 - [ ] Push public GitHub repository; confirm docs work from a genuinely clean clone (new machine or fresh container).

@@ -1,0 +1,19 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc_version = "0.8.26"
+optimizer = true
+optimizer_runs = 200
+
+[rpc_endpoints]
+monad_testnet = "${MONAD_TESTNET_RPC_URL}"
+monad_mainnet = "${MONAD_MAINNET_RPC_URL}"
+
+[etherscan]
+monad_testnet = { key = "${MONAD_TESTNET_EXPLORER_API_KEY}", url = "${MONAD_TESTNET_EXPLORER_API_URL}" }
+monad_mainnet = { key = "${MONAD_MAINNET_EXPLORER_API_KEY}", url = "${MONAD_MAINNET_EXPLORER_API_URL}" }
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

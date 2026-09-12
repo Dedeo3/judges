@@ -1,0 +1,8 @@
+{
+  "name": "@judges/demo-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Scaffolded in Phase 7 (demo integrations)' && exit 1"
+  }
+}

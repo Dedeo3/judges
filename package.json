@@ -1,0 +1,22 @@
+{
+  "name": "judges",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Private human-verification infrastructure for Web3 — WebAuthn/passkey trust primitive on Monad",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present run build",
+    "dev": "pnpm -r --if-present --parallel run dev",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "test:contracts": "cd contracts && forge test",
+    "clean": "pnpm -r --if-present run clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
