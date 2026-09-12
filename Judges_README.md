@@ -70,20 +70,19 @@ It is a developer-facing verification layer.
 A developer should be able to write:
 
 ```ts
-const result = await judges.verify({
-  wallet,
-  assurance: "user_verified"
-});
+const proof = await judges.prove({ assurance: "user_verified", wallet });
+const result = await judges.verify(proof, { walletClient, verifierAddress, chain });
 
 if (result.valid) {
   // allow action
 }
 ```
 
-An onchain application can consume the resulting proof:
+An onchain application can consume the proof directly, and gets sybil resistance without keeping
+any per-user records of its own — a reused credential simply reverts:
 
 ```solidity
-bool valid = judgesVerifier.verify(proof);
+judges.verify(proof, walletCommitment, domain, nullifier, contextHashFor(proposalId, support), wallet);
 ```
 
 The goal is to hide the complexity of:
@@ -182,6 +181,27 @@ onchain trust primitive
 
 This makes Monad part of the architecture instead of merely the deployment destination.
 
+### Where P256VERIFY actually sits in the shipped MVP
+
+Being precise, because this is the claim most worth getting right:
+
+`MonadP256Adapter.sol` wraps the native precompile at `0x0100` and is **deployed and verified
+against live Monad Testnet** — a real secp256r1 keypair, signed off-chain, accepted on-chain
+(`contracts/test/MonadP256Adapter.t.sol`). Verifying it required working around a real gap:
+Foundry's `--fork-url` replays cached state through its own local EVM, which has no knowledge of
+Monad's custom precompiles, so a naive fork test reports `false` for a perfectly valid signature.
+The tests instead send `eth_call` to the real node.
+
+In the proof-of-personhood flow, however, the passkey signature is verified **once, off-chain,
+during the WebAuthn ceremony**, and `JudgesVerifier.verify()` then checks a ZK proof that the
+credential's secret produces the presented commitment and nullifier. The precompile is not on
+that path. This is the Mode A choice described in §8, and it is deliberate — see §8.1 for the
+measured reasoning.
+
+The honest framing: Monad's native P-256 support is what makes an on-chain passkey trust
+primitive *practical at all*, and Judges ships a tested adapter for it. The proof-of-personhood
+flow reaches for ZK instead because of a privacy constraint, not a technical limitation.
+
 ---
 
 ## 6. Product Architecture
@@ -220,12 +240,18 @@ This makes Monad part of the architecture instead of merely the deployment desti
                                     │
                     ┌───────────────▼──────────────┐
                     │     JudgesVerifier.sol        │
-                    │ P256VERIFY + policy checks    │
+                    │ Groth16 proof verification    │
+                    │ wallet/action binding         │
                     │ nullifier / replay protection │
                     └───────────────┬──────────────┘
                                     │
                                   Monad
 ```
+
+The P-256 signature itself is verified during the WebAuthn ceremony in the API layer, not by
+`JudgesVerifier` — see §5 and §8.1. `MonadP256Adapter.sol` exposes Monad's native `P256VERIFY`
+as a separate, deployed primitive for flows that need a live signature check per transaction
+(a passkey-controlled smart account being the obvious one).
 
 ---
 
@@ -437,6 +463,49 @@ A proof-of-concept project exists for WebAuthn P-256 Circom verification, demons
 
 This makes Mode B suitable as an experimental / advanced layer, not as the only security-critical dependency for a hackathon MVP.
 
+### 8.1 Why the signature check stays off the onchain path — with numbers
+
+The obvious objection to Mode A is that it leaves Monad's `P256VERIFY` off the hot path. There is
+a third option between A and B: keep the ZK proof, and *additionally* verify the raw WebAuthn
+assertion on-chain via the precompile. We built a measurement spike for exactly that question
+(`contracts/experiments/WebAuthnOnchainSpike.sol`) rather than arguing about it.
+
+On-chain WebAuthn verification is not one precompile call. The signature covers
+`sha256(authenticatorData ‖ sha256(clientDataJSON))`, and none of the surrounding checks are
+optional: `rpIdHash` must match or a signature from another site is accepted, the UV flag must be
+set or "user verified" means nothing, and the challenge embedded in `clientDataJSON` must match
+or any past assertion replays — which is why base64url encoding ends up on-chain.
+
+Measured, with a 37-byte `authenticatorData` and a 138-byte `clientDataJSON`:
+
+| | Gas on Monad |
+|---|---:|
+| Current `JudgesVerifier.verify()` (ZK, signature checked off-chain) | ~1,130,000 |
+| Adding on-chain WebAuthn + `P256VERIFY` on top | ~1,166,000 (**+3.5%**) |
+| No ZK at all — passkey verified purely on-chain | ~88,000 |
+
+Two things fall out of this:
+
+**Gas is not the argument.** Adding the precompile costs about 39,000 gas — under 4%. What
+dominates is Groth16 verification, because Monad reprices `ecPairing` and `ecMul` at **5×**
+Ethereum: the 5 `ecMul` + 5 `ecAdd` + one 4-pair pairing in the generated verifier come to
+1,056,500 gas on Monad versus 211,750 on Ethereum. Anyone benchmarking a ZK verifier on a local
+Foundry EVM is reading Ethereum prices and will be surprised on deployment.
+
+**The real cost is privacy.** `P256VERIFY` needs the credential's public key as raw coordinates,
+so the public key must appear in calldata. That key is a stable, unique, permanent identifier for
+the passkey — putting it on-chain makes every action by that credential linkable across every
+domain, which is precisely the "one universal public identifier" §7.5 exists to avoid. The
+authenticator's monotonic `signCount` links actions on its own, even without the key. There is no
+partial mitigation: you cannot hide a value from a precompile that requires it. Keeping
+unlinkability while verifying on-chain would mean a separate passkey per application, giving up
+"one credential, many apps".
+
+Stated plainly: **the ZK layer charges roughly 1.04M gas per action, and what it buys is hiding
+the credential public key.** That is a deliberate trade, not an oversight — and the middle option
+is the worst of the three, paying the full ZK cost while forfeiting the property the ZK is there
+to provide.
+
 ---
 
 ## 9. Smart Contract Design
@@ -445,53 +514,78 @@ This makes Mode B suitable as an experimental / advanced layer, not as the only 
 
 Responsibilities:
 
-- verify proof / authentication result;
-- verify P-256 signature where the selected mode requires it;
-- validate policy hash;
-- enforce nullifier uniqueness;
+- verify the Groth16 membership proof;
+- derive and enforce the wallet/action binding (the circuit's `policyHash` public input);
+- enforce nullifier uniqueness via `NullifierRegistry`;
 - expose verification result to consuming applications.
 
-Conceptual interface:
+The P-256 signature is not re-verified here — see §5 and §8.1.
+
+As shipped:
 
 ```solidity
 interface IJudgesVerifier {
-    struct VerificationPolicy {
-        bool requireUserVerification;
-        bool requireHardwareBacked;
-        bool requireUnique;
-        bytes32 domain;
-    }
-
+    /// @param proof        ABI-encoded (uint256[2], uint256[2][2], uint256[2]) Groth16 calldata.
+    /// @param contextHash  App-defined action binding. A DAO folds in (proposalId, support); a
+    ///                     faucet its claim tag. The consuming contract recomputes this from its
+    ///                     own call arguments, so a stolen proof can't be redirected.
+    /// @param wallet       The wallet the proof is bound to. Consumers must credit *this*
+    ///                     address, not msg.sender.
     function verify(
         bytes calldata proof,
         bytes32 walletCommitment,
         bytes32 domain,
-        bytes32 nullifier
+        bytes32 nullifier,
+        bytes32 contextHash,
+        address wallet
     ) external returns (bool valid);
 
     function isNullifierUsed(bytes32 domain, bytes32 nullifier)
         external
         view
         returns (bool);
+
+    /// The policyHash `verify` will require for this binding:
+    /// sha256(contextHash ‖ wallet) mod FIELD_PRIME.
+    function policyHashFor(bytes32 contextHash, address wallet)
+        external
+        pure
+        returns (bytes32);
 }
 ```
 
-The final ABI should be simplified before release; the interface above is an architectural target, not a final audited contract.
+Two deviations from the original sketch, both deliberate:
+
+`policyHash` is **derived inside the contract** from `contextHash` and `wallet` rather than
+accepted as a parameter. Accepting it would let a caller assert any binding they liked, which
+defeats the point — see §7.2 and §19.
+
+`VerificationPolicy` is not implemented. There is no policy engine yet (§26 is the roadmap for
+one), so an assurance level stands in as the `contextHash` default. Shipping a struct that
+nothing enforces would be worse than leaving it out.
 
 ---
 
 ### 9.2 P256 Precompile Adapter
 
-Keep Monad-specific code isolated:
+Keep Monad-specific code isolated. As shipped:
 
 ```text
-contracts/
-  P256Verifier.sol
-  MonadP256Adapter.sol
-  JudgesRegistry.sol
+contracts/src/
+  libraries/P256Verifier.sol      # staticcall + EIP-7951 calldata layout, chain-agnostic
+  interfaces/IP256Verifier.sol
+  MonadP256Adapter.sol            # the one file holding Monad's 0x0100 address
 ```
 
-The adapter should encapsulate the precompile call so the rest of the system does not depend directly on low-level calldata encoding.
+The adapter encapsulates the precompile call so the rest of the system does not depend directly
+on low-level calldata encoding — and so porting to another EIP-7951 chain touches one file.
+
+`JudgesRegistry.sol` was **not built**: its apparent job — credential, application and binding
+records — is served by the Postgres tables in §13, which is where that data has to live anyway
+because it is queried off-chain. Nothing was deployed in its place.
+
+Confirmed at implementation time: address `0x0100`, 6,900 gas, 160-byte input of
+`hash ‖ r ‖ s ‖ qx ‖ qy`, output 32 bytes of `1` on success and empty bytes otherwise.
 
 The Monad documentation currently records P256VERIFY as an enabled protocol feature. citeturn211832search0
 
@@ -572,57 +666,95 @@ import { Judges } from "@judges/sdk";
 
 const judges = new Judges({
   network: "monad-testnet",
-  appId: "my-dapp"
+  appId: "my-dapp" // domain-separates your nullifiers from every other app
 });
 
+// Runs the passkey ceremony in the browser, then has the backend turn it into a ZK proof.
+// `wallet` is required: the proof is bound to it, so a proof lifted from the mempool is
+// useless to anyone else (§7.2).
 const proof = await judges.prove({
-  assurance: "user_verified"
+  assurance: "user_verified",
+  wallet: account
 });
 
-const result = await judges.verify(proof);
+// Submits to JudgesVerifier on Monad with the caller's own wallet client — the SDK never
+// holds a signer.
+const result = await judges.verify(proof, {
+  walletClient,
+  verifierAddress,
+  chain: monadTestnet
+});
 
-console.log(result);
+console.log(result); // { valid: true, txHash: "0x...", domain: "0x...", nullifier: "0x..." }
 ```
 
-Expected response:
+Binding a specific action is one extra argument, and the binding is defined by the consuming
+contract so there is no TypeScript copy of the hashing to drift:
 
 ```ts
-{
-  valid: true,
-  assurance: "user_verified",
-  nullifier: "0x...",
-  domain: "my-dapp",
-  expiresAt: 1790000000
-}
+const contextHash = await dao.read.contextHashFor([proposalId, support]);
+const proof = await judges.prove({ assurance: "user_verified", wallet: account, contextHash });
 ```
 
-The SDK should hide:
+The SDK hides:
 
 - challenge creation;
 - WebAuthn browser calls;
 - serialization/parsing;
-- proof preparation;
+- proof preparation (server-side — the credential secret never reaches the client);
+- the wallet/action binding derivation;
 - RPC interaction;
-- retry handling;
+- retry handling (transient 5xx/429 only — never a consumed WebAuthn challenge);
 - verification result normalization.
+
+`getPolicy()` is not implemented: there is no policy engine to query yet (§26).
 
 ---
 
 ## 12. API Design
 
-### Create verification session
+As shipped, these are Next.js route handlers under `apps/web/src/app/api/**`, deployed as
+serverless functions — there is no standalone API server (§13).
+
+### Passkey registration
 
 ```http
-POST /v1/verify/sessions
+POST /api/webauthn/register/options    -> { sessionId, options }
+POST /api/webauthn/register/verify     -> { verified, credentialId, userId }
+```
+
+### Passkey authentication
+
+```http
+POST /api/webauthn/auth/options        -> { sessionId, options }
+POST /api/webauthn/auth/verify         -> { verified, credentialId, userId, userVerified }
+```
+
+### Wallet binding
+
+Two steps by necessity: the client needs the binding statement before it can sign it.
+
+```http
+POST /api/bindings/challenge           -> { sessionId, options, message }
+POST /api/bindings/verify              -> { verified, wallet, credentialId, domain }
+```
+
+### Generate a membership proof
+
+```http
+POST /api/prove
 ```
 
 Request:
 
 ```json
 {
-  "wallet": "0x...",
+  "sessionId": "...",
+  "response": { "...": "WebAuthn assertion" },
+  "appId": "my-dapp",
   "assurance": "user_verified",
-  "domain": "my-dapp"
+  "wallet": "0x...",
+  "contextHash": "0x..."
 }
 ```
 
@@ -630,60 +762,49 @@ Response:
 
 ```json
 {
-  "sessionId": "sess_...",
-  "challenge": "0x...",
-  "expiresAt": 1790000000
+  "verified": true,
+  "proof": "0x...",
+  "walletCommitment": "0x...",
+  "nullifier": "0x...",
+  "domain": "0x...",
+  "contextHash": "0x...",
+  "wallet": "0x..."
 }
 ```
 
-### Submit WebAuthn response
+Two design points worth stating:
 
-```http
-POST /v1/verify/sessions/:id/assertion
-```
+This endpoint takes a **live WebAuthn assertion, never a bare `credentialId`**. It consumes the
+same single-use challenge as `/api/webauthn/auth/verify`, so a caller cannot request a proof for
+a credential they do not control.
 
-### Generate proof
+It returns the **binding inputs, not the derived `policyHash`**. The contract derives that
+itself; handing it back would invite a caller to pass it along as though it were authoritative.
 
-```http
-POST /v1/proofs
-```
-
-### Verify proof
-
-```http
-POST /v1/verify
-```
-
-Response:
-
-```json
-{
-  "valid": true,
-  "assurance": {
-    "userVerified": true,
-    "hardwareBacked": false,
-    "unique": false
-  },
-  "nullifier": "0x..."
-}
-```
-
-For a hackathon, the API can be simplified to a single session endpoint plus SDK helpers.
+Verification itself has no API endpoint — it happens on-chain, via
+`JudgesVerifier.verify()` from the caller's own wallet (§11).
 
 ---
 
 ## 13. Backend
 
-### Recommended stack
+### Stack as shipped
 
 - **TypeScript**
-- **Node.js**
-- Fastify or Express
-- PostgreSQL
-- Redis
-- WebAuthn library or native WebAuthn APIs
-- viem for EVM RPC
-- Docker
+- **Next.js route handlers** deployed as serverless functions on Vercel — not a standalone
+  Fastify/Express process. Frontend and backend are one deployable unit, which is what makes the
+  whole thing fit on free tiers with no server to keep alive.
+- **Neon** (serverless Postgres) via its HTTP driver, using the pooled connection string
+- **Upstash** (Redis over REST) for challenges — a connection-per-invocation TCP Redis client is
+  the wrong shape for serverless
+- `@simplewebauthn/server` for ceremony validation
+- `snarkjs` for proof generation, `viem` for EVM RPC
+- Docker Compose for local Postgres/Redis only
+
+One consequence of serverless worth stating: anything that waits on a Monad transaction
+confirmation happens client-side via the SDK, not inside a function, because functions have an
+execution time cap. That is also the correct shape for a dApp — the user's wallet signs, not the
+backend.
 
 ### Responsibilities
 
@@ -725,22 +846,34 @@ policy_hash
 created_at
 ```
 
-#### verification_sessions
+#### bindings
 
 ```text
 id
-application_id
-wallet
-challenge_hash
-expires_at
-status
+credential_id      -> credentials(id)
+wallet_address
+domain
+created_at
+revoked_at
 ```
+
+Two partial unique indexes on `(domain, credential_id)` and `(domain, wallet_address)`, both
+`where revoked_at is null`, make "one active binding per domain" a database invariant rather than
+an application-level check that a concurrent request could slip past.
+
+Verification sessions are **not** a Postgres table: they are short-TTL Redis keys, consumed with
+`GETDEL` so a challenge is single-use atomically. Storing them in Postgres would mean writing a
+row per ceremony and then needing to expire it.
 
 Do not store raw biometric information.
 
 Do not store private credential keys.
 
 Do not store unnecessary identity information.
+
+One secret does need care: `JUDGES_DOMAIN_SECRET`, from which every credential secret,
+commitment, and nullifier is derived. It is effectively permanent — rotating it invalidates every
+registered passkey and orphans every nullifier already consumed on-chain.
 
 ---
 
@@ -758,24 +891,26 @@ Recommended stack:
 
 The demo should show the product as **infrastructure**, not as a beautiful dashboard with no technical substance.
 
-Recommended pages:
+Pages as shipped:
 
 ```text
-/
-  Landing / explanation
-
 /demo
-  live verification demo
+  register a passkey, bind a wallet, prove membership via the SDK
 
-/developers
-  SDK examples
+/demo/dao
+  one credential, one vote per proposal
 
-/playground
-  choose policy -> generate proof -> verify
+/demo/agent
+  register an AI agent only under a verified credential
 
-/transactions
-  Monad transaction activity
+/demo/faucet
+  one claim per credential
 ```
+
+Each demo page reads its action binding from its own contract's `contextHashFor(...)` view
+function rather than recomputing the hash in TypeScript, and links the resulting transaction on
+the Monad explorer. A landing page and a `/developers` page are not built; `docs/integration.md`
+serves the developer-facing role for now.
 
 ---
 
@@ -846,67 +981,84 @@ This provides the clearest visual demonstration of why the primitive matters.
 
 ---
 
-## 16. Recommended Repository Structure
+## 16. Repository Structure
+
+As shipped:
 
 ```text
 judges/
 ├── apps/
-│   ├── web/
-│   ├── playground/
-│   └── demo-agent/
+│   └── web/                       # Next.js: demo pages AND the backend, as API routes
+│       ├── src/app/api/           #   webauthn/*, bindings/*, prove — Vercel Functions
+│       ├── src/app/demo/          #   /demo plus dao, agent, faucet
+│       ├── src/lib/               #   stores, prove orchestration, chain/address config
+│       └── migrations/
 │
 ├── packages/
-│   ├── sdk/
-│   ├── webauthn/
-│   ├── crypto/
+│   ├── sdk/                       # @judges/sdk — browser-facing
+│   ├── webauthn/                  # ceremony helpers (server-only)
+│   ├── crypto/                    # field, commitment, nullifier, policy binding
 │   └── types/
 │
 ├── contracts/
-│   ├── JudgesVerifier.sol
-│   ├── JudgesRegistry.sol
-│   ├── NullifierRegistry.sol
-│   └── interfaces/
+│   ├── src/
+│   │   ├── JudgesVerifier.sol
+│   │   ├── JudgesGroth16Verifier.sol   # generated from the trusted setup, committed
+│   │   ├── NullifierRegistry.sol
+│   │   ├── MonadP256Adapter.sol
+│   │   ├── libraries/                  # P256Verifier, JudgesField
+│   │   ├── interfaces/
+│   │   └── demos/                      # the three §15 integrations
+│   ├── script/DeployJudges.s.sol
+│   ├── experiments/                    # measurement spikes, not deployed
+│   └── test/
 │
 ├── prover/
-│   ├── circuits/
-│   ├── scripts/
-│   └── tests/
-│
-├── server/
-│   ├── src/
-│   ├── migrations/
-│   └── tests/
+│   ├── circuits/judges_membership.circom
+│   ├── scripts/                        # build, trusted setup, fixture generators
+│   └── build/                          # frozen zkey + wasm committed; ceremony files ignored
 │
 ├── docs/
 │   ├── architecture.md
-│   ├── security.md
+│   ├── deployment.md
+│   ├── integration.md
 │   ├── protocol.md
-│   └── integration.md
+│   └── security.md
 │
-├── docker/
+├── docker/                        # local Postgres/Redis only
 ├── scripts/
-├── README.md
-└── package.json
+├── IMPLEMENTATION.md              # phase-by-phase build log and open items
+└── package.json                   # pnpm workspace root
 ```
+
+Differences from the original plan, each deliberate: there is no `server/` (the backend is
+`apps/web`'s API routes, §13), no `apps/playground` (the `/demo` routes cover it), and no
+`JudgesRegistry.sol` (§9.2).
+
+A note on what is committed under `prover/build/`: the final proving key and wasm are checked in
+on purpose, because `JudgesGroth16Verifier.sol` has that exact key's verification data baked in.
+A fresh clone must be able to produce proofs the deployed verifier accepts; re-running the
+trusted setup would generate a different, incompatible key. The ceremony intermediates are
+gitignored.
 
 ---
 
 ## 17. Technology Choices
 
-| Layer | MVP choice | Why |
+| Layer | Shipped choice | Why |
 |---|---|---|
-| Frontend | Next.js + TypeScript | Fast demo + ecosystem |
-| Wallet | wagmi + viem | EVM-native integration |
-| WebAuthn | Native WebAuthn API or SimpleWebAuthn | Standards-based implementation |
-| Backend | Node.js + TypeScript | Fast iteration + SDK sharing |
-| DB | PostgreSQL | Credential/app/session metadata |
-| Cache | Redis | Challenge expiry and replay protection |
-| ZK | Circom/snarkjs or another mature proving stack | Practical hackathon path |
-| Contract | Solidity | Monad EVM environment |
-| Chain | Monad Testnet | Fast live demo |
+| Frontend | Next.js 16 + TypeScript | Fast demo + ecosystem |
+| Wallet | raw EIP-1193 + viem | One account, one chain — a connector library would be a large dependency for that. The SDK accepts any viem `WalletClient`, so integrators bring their own stack. |
+| WebAuthn | `@simplewebauthn/server` + `/browser`, discoverable credentials | Standards-based; resident keys mean authentication needs no username lookup |
+| Backend | Next.js API routes (Vercel Functions) | Same deployable unit as the frontend — no server to keep alive, fits free tiers |
+| DB | Neon (serverless Postgres, HTTP driver) | Credential/app/binding records; pooled string for serverless |
+| Cache | Upstash (Redis over REST) | Challenge expiry + single-use via `GETDEL`; a TCP client is the wrong shape per-invocation |
+| ZK | Circom 2.2.3 + snarkjs (Groth16) | Practical hackathon path; `poseidon-lite` matches circomlib in TS |
+| Contract | Solidity 0.8.26 + Foundry | Monad EVM environment |
+| Chain | Monad Testnet (`10143`) | Fast live demo; chain definitions from viem |
 | RPC | viem | Typed EVM client |
-| Tests | Foundry + Vitest/Jest | Contract + backend coverage |
-| Infra | Docker | Reproducible local setup |
+| Tests | Foundry + Vitest | 53 Foundry, 22 Vitest, 4 ZK acceptance checks |
+| Infra | Vercel + Docker (local only) | Reproducible local setup, zero-ops deploy |
 
 ### ZK technology note
 
@@ -917,6 +1069,12 @@ Therefore the hackathon architecture should prioritize a reliable P256 + privacy
 ---
 
 ## 18. Implementation Plan
+
+> **Status**: Phases 1–8 are built, with the acceptance test for each one recorded against actual
+> runs. See [`IMPLEMENTATION.md`](IMPLEMENTATION.md) for the phase-by-phase log — including the
+> things that turned out differently from this plan, and the deviations' reasoning — and
+> [`docs/deployment.md`](docs/deployment.md) for what remains: the deploy itself, the datastores,
+> the demo video, and an external integrator. The plan below is kept as written for comparison.
 
 ### Phase 1 - WebAuthn foundation
 
@@ -1360,6 +1518,30 @@ Judges should explicitly acknowledge:
 3. Synced passkeys are not equivalent to device-bound hardware credentials. citeturn822650search0turn822650search6
 4. Stronger hardware-backed assurance depends on the authenticator and platform capabilities.
 5. The full P-256-inside-ZK path is technically possible but substantially heavier than native P256 verification and should not be presented as audited production cryptography during the hackathon. citeturn919558search2turn919558search5
+
+### Additional limitations found while building, not designing
+
+6. **The trusted setup is single-contributor and local.** Fine for a demo; not production-safe —
+   whoever ran that one contribution could in principle forge proofs. A real deployment needs a
+   multi-party ceremony, or a public Powers-of-Tau file plus an independent phase-2
+   contribution. (Both documented public `.ptau` mirrors returned `AccessDenied` at build time,
+   so the MVP generates its own.) See `prover/README.md`.
+7. **A nullifier can be griefed, though not stolen.** Proofs are bound to a wallet and an action
+   (§7.2), so a proof lifted from the mempool cannot be redirected — but an observer can still
+   submit it *for its rightful wallet*, which merely makes the owner's own action land a moment
+   early while consuming the nullifier. Closing that needs a per-submission nonce inside the
+   circuit; out of MVP scope.
+8. **The credential secret is server-derived, not authenticator-derived.** A WebAuthn private key
+   is non-extractable by design, so the value playing the role of `credential_secret` in §7.4 is
+   `HMAC(JUDGES_DOMAIN_SECRET, credentialId ‖ publicKey)`. This means the Judges backend *can*
+   compute any registered credential's nullifiers. It cannot forge a WebAuthn assertion, so it
+   cannot impersonate a user to a relying party — but a fully trust-minimised design would not
+   hand the backend that capability. Named here rather than buried.
+9. **`unique` assurance is still a policy label, not an enforced property**, exactly as §3 warns.
+   No policy engine exists yet (§26); the assurance level currently feeds the action binding.
+10. **Groth16 verification costs ~1.13M gas on Monad**, because `ecPairing` and `ecMul` are
+    repriced at 5× Ethereum. Benchmarks taken on a local Foundry EVM read Ethereum prices and
+    understate this by roughly 845,000 gas. See §8.1.
 
 Being explicit about these limitations is a feature, not a weakness: it gives judges confidence that the security model is understood.
 
