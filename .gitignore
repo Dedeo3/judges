@@ -1,0 +1,75 @@
+# --- Dependencies ---
+node_modules/
+.pnpm-store/
+.yarn/
+.npm/
+
+# --- Build output ---
+dist/
+build/
+out/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# --- Logs ---
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# --- Testing / coverage ---
+coverage/
+.nyc_output/
+
+# --- Foundry / Solidity ---
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/31337/
+contracts/broadcast/*/1337/
+!contracts/broadcast/**/run-latest.json
+contracts/lib/
+*.pyc
+
+# --- Circom / snarkjs (ZK artifacts, large + regeneratable) ---
+prover/**/*.zkey
+prover/**/*.ptau
+prover/**/*.r1cs
+prover/**/*.wasm
+prover/**/*.sym
+prover/build/
+prover/**/witness.wtns
+
+# --- Docker ---
+docker/**/*.local.yml
+docker/volumes/
+
+# --- Database / cache local state ---
+*.sqlite
+*.sqlite3
+pgdata/
+redis-data/
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+
+# --- Editor / IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# --- Misc local scratch ---
+*.tmp
+*.bak
+.cache/
