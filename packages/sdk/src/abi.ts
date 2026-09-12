@@ -9,7 +9,7 @@ export const judgesVerifierAbi = [
       { name: "walletCommitment", type: "bytes32" },
       { name: "domain", type: "bytes32" },
       { name: "nullifier", type: "bytes32" },
-      { name: "policyHash", type: "bytes32" },
+      { name: "contextHash", type: "bytes32" },
       { name: "wallet", type: "address" },
     ],
     outputs: [{ name: "valid", type: "bool" }],

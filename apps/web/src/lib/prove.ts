@@ -1,7 +1,13 @@
 import path from "node:path";
 import * as snarkjs from "snarkjs";
 import { encodeAbiParameters } from "viem";
-import { deriveCredentialSecret, deriveMembershipWitness, hashToField, toBytes32Hex } from "@judges/crypto";
+import {
+  assuranceContextHash,
+  deriveCredentialSecret,
+  deriveMembershipWitness,
+  derivePolicyHashFromHex,
+  toBytes32Hex,
+} from "@judges/crypto";
 import { verifyAuthentication, type AuthenticationResponseJSON } from "@judges/webauthn";
 import { rpConfig, requireEnv } from "./env";
 import { redisChallengeStore } from "./challengeStore";
@@ -20,9 +26,14 @@ export type ProveResult =
       walletCommitment: `0x${string}`;
       nullifier: `0x${string}`;
       domain: `0x${string}`;
-      policyHash: `0x${string}`;
+      contextHash: `0x${string}`;
+      wallet: `0x${string}`;
     }
   | { verified: false; reason: string };
+
+function toHex32(bytes: Uint8Array): `0x${string}` {
+  return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
 
 /**
  * Verifies a fresh WebAuthn assertion (the same challenge-consumption path as
@@ -38,6 +49,13 @@ export async function proveMembership(params: {
   response: AuthenticationResponseJSON;
   appId: string;
   assurance: string;
+  /** The wallet this proof is bound to — an attacker lifting the proof can't redirect it. */
+  wallet: string;
+  /**
+   * App-defined action binding (0x + 64 hex). A DAO folds in (proposalId, support); omitted, it
+   * defaults to the assurance level alone, which binds the wallet but not a specific action.
+   */
+  contextHash?: string;
 }): Promise<ProveResult> {
   const auth = await verifyAuthentication({
     rp: rpConfig,
@@ -62,9 +80,11 @@ export async function proveMembership(params: {
     credentialPublicKey: credential.publicKey,
   });
 
-  // No real policy engine yet (README §26/V2) -- the assurance level is the closest thing to a
-  // policy today, so it stands in as the circuit's opaque policyHash public input.
-  const policyHash = hashToField(params.assurance);
+  // The circuit's policyHash public input carries the wallet/action binding (README §7.2).
+  // JudgesVerifier.sol recomputes exactly this from its own call arguments, so a proof can't be
+  // lifted from the mempool and pointed at a different wallet or a different action.
+  const contextHash = params.contextHash ?? toHex32(assuranceContextHash(params.assurance));
+  const policyHash = derivePolicyHashFromHex({ contextHash, wallet: params.wallet });
 
   const witness = deriveMembershipWitness({
     credentialSecret,
@@ -97,6 +117,9 @@ export async function proveMembership(params: {
     walletCommitment: toBytes32Hex(witness.walletCommitment),
     nullifier: toBytes32Hex(witness.nullifier),
     domain: toBytes32Hex(witness.applicationIdHash),
-    policyHash: toBytes32Hex(witness.policyHash),
+    // The binding inputs, not the derived policyHash: the contract derives that itself, and
+    // handing it back would invite a caller to pass it along as if it were authoritative.
+    contextHash: contextHash as `0x${string}`,
+    wallet: params.wallet as `0x${string}`,
   };
 }

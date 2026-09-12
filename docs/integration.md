@@ -33,7 +33,12 @@ const judges = new Judges({
 
 // 1. Runs the WebAuthn ceremony in the browser, then asks the Judges backend to turn the
 //    result into a ZK proof. The credential secret never leaves the server.
-const proof = await judges.prove({ assurance: "user_verified" });
+//    `wallet` is required: the proof is cryptographically bound to it, so a proof sitting in
+//    the mempool can't be lifted and submitted by someone else.
+const proof = await judges.prove({
+  assurance: "user_verified",
+  wallet: account, // the address that will submit the proof
+});
 
 // 2. Submits the proof to JudgesVerifier.verify() on Monad using YOUR connected wallet client
 //    (the SDK never holds a signer) and consumes the nullifier for your app's domain.
@@ -48,6 +53,35 @@ if (result.valid) {
   // and can't reuse the same proof again in your domain (nullifier consumed on-chain).
 }
 ```
+
+### Binding a proof to a specific action
+
+By default a proof is bound to the wallet but not to any particular action, which is fine for a
+plain "is this a verified human" gate. When the action itself matters — *which* way you voted,
+*which* agent you registered — bind it, or a third party could lift the proof and point it at a
+different action.
+
+Your contract defines the binding and exposes it as a view function, so there's exactly one
+definition and nothing to reimplement in TypeScript:
+
+```ts
+// The DAO contract computes the binding from its own arguments.
+const contextHash = await publicClient.readContract({
+  address: daoAddress,
+  abi: daoAbi,
+  functionName: "contextHashFor",
+  args: [proposalId, support],
+});
+
+const proof = await judges.prove({ assurance: "user_verified", wallet: account, contextHash });
+
+// The DAO passes the same binding to JudgesVerifier internally, so this proof only works for
+// this proposal, this vote direction, and this wallet.
+await daoContract.write.vote([proposalId, support, proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet]);
+```
+
+See `contracts/src/demos/` for three worked examples (DAO voting, an AI agent registry, and a
+sybil-resistant faucet).
 
 ### Checking a nullifier without a wallet
 
@@ -64,6 +98,8 @@ const used = await judges.isNullifierUsed({
 
 - WebAuthn challenge creation and the browser ceremony (`@simplewebauthn/browser`)
 - Server-side credential-secret derivation and ZK proof generation (never exposed to the client)
+- The wallet/action binding (`policyHash = sha256(contextHash ‖ wallet) mod FIELD_PRIME`) — you
+  pass a wallet and optionally a context; the SDK and `JudgesVerifier` agree on the rest
 - ABI encoding of the Groth16 proof for `JudgesVerifier.verify()`
 - Retries on transient API failures (network errors, 5xx — not 4xx, and not a WebAuthn ceremony
   itself, since a consumed challenge can't be resubmitted)

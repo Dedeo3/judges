@@ -84,14 +84,21 @@ export default function DemoPage() {
   }
 
   async function handleProveMembership() {
+    if (!wallet) {
+      setStatus({ kind: "error", message: "Connect a wallet first — proofs are bound to one wallet" });
+      return;
+    }
     setBusy(true);
     setStatus({ kind: "idle" });
     try {
       const judges = new Judges({ network: "monad-testnet", appId: domain });
-      const proof: JudgesProof = await judges.prove({ assurance: "user_verified" });
+      const proof: JudgesProof = await judges.prove({
+        assurance: "user_verified",
+        wallet: wallet as `0x${string}`,
+      });
       setStatus({
         kind: "success",
-        message: `ZK proof generated. nullifier ${proof.nullifier.slice(0, 12)}…, domain ${proof.domain.slice(0, 12)}… (onchain verify() needs a deployed JudgesVerifier — Phase 8)`,
+        message: `ZK proof generated, bound to ${proof.wallet.slice(0, 6)}…${proof.wallet.slice(-4)}. nullifier ${proof.nullifier.slice(0, 12)}…, domain ${proof.domain.slice(0, 12)}… (onchain verify() needs a deployed JudgesVerifier — Phase 8)`,
       });
     } catch (err) {
       setStatus({ kind: "error", message: err instanceof Error ? err.message : "Proof generation failed" });
@@ -172,14 +179,6 @@ export default function DemoPage() {
 
       <hr style={{ margin: "32px 0" }} />
 
-      <h2>Phase 6: @judges/sdk</h2>
-      <p>Uses the real published SDK package, not a direct fetch — proves via the WebAuthn ceremony above.</p>
-      <button onClick={handleProveMembership} disabled={busy}>
-        Prove membership (ZK) via SDK
-      </button>
-
-      <hr style={{ margin: "32px 0" }} />
-
       <h2>Wallet binding</h2>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <button onClick={handleConnectWallet} disabled={busy}>
@@ -190,6 +189,17 @@ export default function DemoPage() {
           Bind wallet to passkey
         </button>
       </div>
+
+      <hr style={{ margin: "32px 0" }} />
+
+      <h2>Phase 6: @judges/sdk</h2>
+      <p>
+        Uses the real published SDK package, not a direct fetch — proves via the WebAuthn ceremony above. Needs a
+        connected wallet: proofs are cryptographically bound to one wallet, so they can&apos;t be lifted and reused.
+      </p>
+      <button onClick={handleProveMembership} disabled={busy || !wallet}>
+        Prove membership (ZK) via SDK
+      </button>
 
       {status.kind !== "idle" && (
         <p style={{ marginTop: 24, color: status.kind === "error" ? "crimson" : "green" }}>{status.message}</p>

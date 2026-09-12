@@ -231,18 +231,44 @@ Goal: `@judges/sdk` hides WebAuthn + P256 + replay protection + nullifiers behin
 
 Build all three using the same SDK, no bespoke logic per app:
 
-- [ ] **Sybil-resistant DAO** (`apps/web` route or standalone): connect wallet → verify with Judges → vote → nullifier checked → second vote attempt with same nullifier rejected.
-- [ ] **AI Agent Registry** (`apps/demo-agent`): create agent → Judges verification → `AgentRegistry.sol` records agent only if verification passed.
-- [ ] **Sybil-resistant Faucet/Airdrop**: claim → Judges proof → nullifier check → used → reject / unused → claim.
+### 7a. Prerequisite fix — proofs were bearer tokens (README §7.2)
 
-**Acceptance**: each flow demonstrable end-to-end in a browser against Monad Testnet, matching the "Killer Demo" script in README §21 (fits inside a 3-minute recording).
+Found while thinking through what a demo's `vote()` call would actually look like, and fixed before building on top of it: nothing bound a proof to the wallet or to the action. A proof sits in the mempool as public calldata, so anyone could lift it, submit it as themselves, and **pick the action parameters freely** — vote the opposite way on someone else's proof, or send a faucet claim wherever they liked. README §7.2 specifies exactly this binding (`challenge = H(judgesDomain ‖ appId ‖ wallet ‖ action ‖ nonce ‖ expiry)`); the implementation had drifted from it.
+
+The fix cost no circuit change, because `policyHash` was already an opaque public input — only *how it's computed* changed:
+
+- [x] `packages/crypto/src/policy.ts` — `policyHash = toField(sha256(contextHash ‖ wallet))`. Byte-oriented on purpose (32-byte context ‖ 20-byte address): hashing display strings ("0xAbC…" vs "0xabc…") is exactly where a TS and a Solidity half silently diverge. 8 new vitest tests.
+- [x] `JudgesVerifier.verify()` now takes `contextHash` + `wallet` and **derives** `policyHash` itself via `policyHashFor()` — accepting it as a parameter would let a caller assert whatever binding they liked.
+- [x] The SDK's `prove()` requires `wallet` and accepts an optional `contextHash`; `verify()` refuses to submit a proof whose bound wallet isn't the submitting account.
+- [x] **Cross-language check** in `JudgesVerifier.t.sol`: Solidity's `policyHashFor` must equal the value TS's `derivePolicyHash` produced when the proof was generated. If those two ever drift, every proof silently stops verifying on-chain — this catches it in CI instead of at deploy time.
+- [x] Two new real-proof tests: a proof submitted for a different wallet is rejected, and a proof redirected to a different action is rejected.
+
+Residual, documented: an attacker can still *burn* a nullifier they've seen (submitting it for its rightful wallet, which merely does what the owner intended a moment early) — a griefing/DoS nuisance, not theft. Fully closing that needs a per-submission nonce in the circuit; out of MVP scope.
+
+### 7b. The three demos
+
+- [x] **Sybil-resistant DAO** — `contracts/src/demos/SybilResistantDAO.sol`: proposals with yes/no tallies; `vote()` calls `judges.verify()` with the DAO's own domain and `contextHashFor(proposalId, support)`. The sybil resistance is *entirely* Judges' — there's no per-voter bookkeeping in the contract at all, the second vote just hits `NullifierAlreadyUsed`.
+- [x] **AI Agent Registry** — `contracts/src/demos/AgentRegistry.sol`: `registerAgent(name, …)` records an agent only if a verified credential authorized it, owned by the *bound* wallet rather than `msg.sender`. Context binds the agent name.
+- [x] **Sybil-resistant Faucet** — `contracts/src/demos/SybilResistantFaucet.sol`: one claim per credential per domain; funds go to the bound wallet, so a third-party submitter just pays gas to deliver someone else their own claim. Nullifier is consumed before the transfer, so a reentrant claim hits `NullifierAlreadyUsed` rather than draining it.
+- [x] Each contract exposes `contextHashFor(...)` as a view function so clients read the binding **off the chain** instead of reimplementing the hashing in TypeScript — one definition, nothing to drift. Documented with a worked example in `docs/integration.md`.
+- [x] Each takes its `domain` as a constructor argument (computed from the app's domain string by the deploy script) rather than hardcoding a hash, and passes it to `verify()` — which is also what stops a proof minted for one demo being replayed against another.
+
+**Verified**: 40/40 Foundry tests pass (19 new across the three demos, 8 in `JudgesVerifier.t.sol` including the real-proof theft/redirect cases, plus the existing NullifierRegistry and MonadP256Adapter suites). Workspace `typecheck`/`lint`/`build` green; 22/22 vitest. `/demo`'s SDK button now requires a connected wallet, verified live in a browser.
+
+**Test architecture note**: the demos' own logic is tested against a `MockJudgesVerifier` that reproduces the two behaviours they depend on (reverting on a bad proof, and reverting with the real `NullifierAlreadyUsed` on reuse). Generating a real Groth16 proof takes minutes, so putting one in every demo test would make the suite unrunnable; the real cryptographic path is covered with real proofs in `JudgesVerifier.t.sol`, which is what the demos call into.
+
+**Acceptance** (as originally written): each flow demonstrable end-to-end in a browser against Monad Testnet, matching the "Killer Demo" script in README §21.
+
+**Not yet done**: the browser UIs for the three demos, and any end-to-end run. Both need deployed contract addresses (Phase 8) — building dead UI pages that can't call anything would be worse than leaving them for the phase that can wire them up. The contracts and their tests are the substantive deliverable here.
 
 ---
 
 ## 9. Phase 8 — Testnet Deployment
 
-- [ ] Deploy `JudgesVerifier`, `JudgesRegistry`, `NullifierRegistry` (and adapters) to **Monad Testnet** (chain ID `10143`) via Foundry script (`forge script`).
+- [ ] Deploy to **Monad Testnet** (chain ID `10143`) via a Foundry script (`forge script`), in this order (the registry's `setVerifier` is a one-shot, deployer-only call that breaks the constructor cycle): `Groth16Verifier` → `NullifierRegistry` → `MonadP256Adapter` → `JudgesVerifier` → `nullifierRegistry.setVerifier(judgesVerifier)` → the three demo contracts (`SybilResistantDAO`, `AgentRegistry`, `SybilResistantFaucet`), each with its domain computed from its app-id string by the script (see `packages/crypto`'s `hashToField`).
+- [ ] **Note on `JudgesRegistry`**: README §9.2/§16 lists it, but nothing was ever built — and on reflection nothing needs it. Its apparent job (credential, application, and binding records) is served by the Neon tables from Phases 1–2, which is where that data has to live anyway since it's queried off-chain. Either drop it from the architecture docs or write down what it would add that the DB doesn't; do not deploy a placeholder.
 - [ ] Verify contracts on the Monad Testnet explorer.
+- [ ] Configure Vercel `outputFileTracingIncludes` so `prover/build`'s wasm + zkey ship with the `/api/prove` function — a cross-package `fs` read that Next's tracer won't pick up on its own (flagged in Phase 6).
 - [ ] Provision free-tier **Neon** (Postgres) and **Upstash** (Redis) projects; set their connection strings as Vercel environment variables for `apps/web`.
 - [ ] `vercel deploy` (or connect the GitHub repo to Vercel for auto-deploy on push) — this is the live product link required for submission.
 - [ ] Point `apps/web`, `apps/demo-agent`, and the SDK's default network config at the deployed testnet addresses.

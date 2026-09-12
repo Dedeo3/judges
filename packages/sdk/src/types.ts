@@ -28,7 +28,10 @@ export interface JudgesProof {
   walletCommitment: `0x${string}`;
   nullifier: `0x${string}`;
   domain: `0x${string}`;
-  policyHash: `0x${string}`;
+  /** The action binding this proof commits to — JudgesVerifier re-derives policyHash from it. */
+  contextHash: `0x${string}`;
+  /** The wallet this proof is bound to. Consumers must credit this, not msg.sender. */
+  wallet: `0x${string}`;
   appId: string;
   assurance: AssuranceLevel;
 }

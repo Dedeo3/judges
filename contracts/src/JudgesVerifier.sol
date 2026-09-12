@@ -18,9 +18,13 @@ import {Groth16Verifier} from "./JudgesGroth16Verifier.sol";
 ///      shipping WebAuthn assertion bytes on-chain every time, defeating the point of proving
 ///      the relationship in zero-knowledge instead. `MonadP256Adapter` remains a separately
 ///      useful, independently tested building block (e.g. for a future smart-account /ERC-4337-
-///      style flow that validates a live passkey signature per transaction) — it's simply not
-///      wired into *this* proof-of-personhood path.
+///      style flow that validates a live passkey signature per transaction).
 contract JudgesVerifier is IJudgesVerifier {
+    /// @dev BN254 scalar field — the circuit's public inputs live here, so the derived policy
+    ///      hash must be reduced into it to match what the prover fed the circuit.
+    uint256 internal constant FIELD_PRIME =
+        21888242871839275222246405745257275088548364400416034343698204186575808495617;
+
     Groth16Verifier public immutable zkVerifier;
     NullifierRegistry public immutable nullifierRegistry;
 
@@ -32,28 +36,34 @@ contract JudgesVerifier is IJudgesVerifier {
         nullifierRegistry = NullifierRegistry(_nullifierRegistry);
     }
 
-    /// @param proof ABI-encoded (uint256[2] pA, uint256[2][2] pB, uint256[2] pC) — Groth16 proof.
+    /// @inheritdoc IJudgesVerifier
+    /// @dev Mirrors `derivePolicyHash` in packages/crypto — both sides hash the same 52 raw
+    ///      bytes (32-byte context ‖ 20-byte address). Byte-oriented on purpose: hashing display
+    ///      strings across TS and Solidity is exactly where these two halves silently diverge.
+    function policyHashFor(bytes32 contextHash, address wallet) public pure returns (bytes32) {
+        return bytes32(uint256(sha256(abi.encodePacked(contextHash, wallet))) % FIELD_PRIME);
+    }
+
+    /// @inheritdoc IJudgesVerifier
     function verify(
         bytes calldata proof,
         bytes32 walletCommitment,
         bytes32 domain,
         bytes32 nullifier,
-        bytes32 policyHash,
+        bytes32 contextHash,
         address wallet
     ) external override returns (bool valid) {
-        (uint256[2] memory pA, uint256[2][2] memory pB, uint256[2] memory pC) =
-            _decodeProof(proof);
+        (uint256[2] memory pA, uint256[2][2] memory pB, uint256[2] memory pC) = _decodeProof(proof);
+
+        // Derived, never accepted from the caller: this is the wallet/action binding, so letting
+        // a caller pass it directly would let them assert any binding they like.
+        uint256 policyHash = uint256(policyHashFor(contextHash, wallet));
 
         // Order matches the circuit's declared public signals exactly: one output
         // (policyHashEcho) followed by four public inputs (walletCommitment, nullifier,
         // applicationIdHash, policyHash) — see JudgesGroth16Verifier.sol's provenance note.
-        uint256[5] memory publicSignals = [
-            uint256(policyHash),
-            uint256(walletCommitment),
-            uint256(nullifier),
-            uint256(domain),
-            uint256(policyHash)
-        ];
+        uint256[5] memory publicSignals =
+            [policyHash, uint256(walletCommitment), uint256(nullifier), uint256(domain), policyHash];
 
         if (!zkVerifier.verifyProof(pA, pB, pC, publicSignals)) {
             revert InvalidProof();
@@ -63,6 +73,7 @@ contract JudgesVerifier is IJudgesVerifier {
         return true;
     }
 
+    /// @inheritdoc IJudgesVerifier
     function isNullifierUsed(bytes32 domain, bytes32 nullifier) external view override returns (bool) {
         return nullifierRegistry.isNullifierUsed(domain, nullifier);
     }

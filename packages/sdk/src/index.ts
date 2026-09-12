@@ -24,7 +24,8 @@ interface ProveApiResponse {
   walletCommitment?: `0x${string}`;
   nullifier?: `0x${string}`;
   domain?: `0x${string}`;
-  policyHash?: `0x${string}`;
+  contextHash?: `0x${string}`;
+  wallet?: `0x${string}`;
 }
 
 /**
@@ -55,7 +56,16 @@ export class Judges {
    * turn the result into a ZK membership proof. The credential secret never leaves the server —
    * this call only ever sees the finished proof.
    */
-  async prove(params: { assurance: import("@judges/types").AssuranceLevel }): Promise<JudgesProof> {
+  async prove(params: {
+    assurance: import("@judges/types").AssuranceLevel;
+    /** The wallet this proof is bound to — required, so a lifted proof can't be redirected. */
+    wallet: Address;
+    /**
+     * App-defined action binding (0x + 64 hex), e.g. a DAO's (proposalId, support). Omitted, the
+     * proof binds the wallet but not a specific action.
+     */
+    contextHash?: `0x${string}`;
+  }): Promise<JudgesProof> {
     const { sessionId, options } = await postJson<{ sessionId: string; options: unknown }>(
       `${this.apiBaseUrl}/webauthn/auth/options`,
       {},
@@ -69,11 +79,26 @@ export class Judges {
 
     const result = await postJson<ProveApiResponse>(
       `${this.apiBaseUrl}/prove`,
-      { sessionId, response, appId: this.appId, assurance: params.assurance },
+      {
+        sessionId,
+        response,
+        appId: this.appId,
+        assurance: params.assurance,
+        wallet: params.wallet,
+        contextHash: params.contextHash,
+      },
       this.maxRetries,
     );
 
-    if (!result.verified || !result.proof || !result.walletCommitment || !result.nullifier || !result.domain || !result.policyHash) {
+    if (
+      !result.verified ||
+      !result.proof ||
+      !result.walletCommitment ||
+      !result.nullifier ||
+      !result.domain ||
+      !result.contextHash ||
+      !result.wallet
+    ) {
       throw new Error(`Judges.prove failed: ${result.reason ?? "unknown reason"}`);
     }
 
@@ -82,7 +107,8 @@ export class Judges {
       walletCommitment: result.walletCommitment,
       nullifier: result.nullifier,
       domain: result.domain,
-      policyHash: result.policyHash,
+      contextHash: result.contextHash,
+      wallet: result.wallet,
       appId: this.appId,
       assurance: params.assurance,
     };
@@ -101,11 +127,18 @@ export class Judges {
       throw new Error("Judges.verify requires an account (pass options.account, or connect one on the walletClient)");
     }
 
+    if (account.toLowerCase() !== proof.wallet.toLowerCase()) {
+      throw new Error(
+        `Judges.verify: proof is bound to ${proof.wallet}, but the submitting account is ${account}. ` +
+          "Generate the proof for the account that will submit it.",
+      );
+    }
+
     const txHash = await options.walletClient.writeContract({
       address: options.verifierAddress,
       abi: judgesVerifierAbi,
       functionName: "verify",
-      args: [proof.proof, proof.walletCommitment, proof.domain, proof.nullifier, proof.policyHash, account],
+      args: [proof.proof, proof.walletCommitment, proof.domain, proof.nullifier, proof.contextHash, proof.wallet],
       account,
       chain: options.chain,
     });
