@@ -194,6 +194,20 @@ changed policy  -> proof fails       [PASS]
 
 ---
 
+## 6a. Gap fill — `JudgesVerifier.sol` (README §9.1)
+
+**Found while starting Phase 6**: the plan referenced `JudgesVerifier.sol` from Phase 3 and 4's write-ups ("Phase 9, not deployed yet") and Phase 8 lists deploying it — but no phase ever listed *writing* it as its own task. Since Phase 6's SDK has nothing meaningful to call without it, it's built now rather than left as a silent hole:
+
+- [x] `contracts/src/JudgesGroth16Verifier.sol` — the Groth16 verifier contract exported via `snarkjs zkey export solidityverifier` from Phase 5's frozen `judges_membership_final.zkey`. Copied in verbatim (never hand-edit generated crypto code); a Judges-authored provenance comment explains where it came from and that regenerating the trusted setup means re-exporting and replacing this file. Uses only standard EVM precompiles (ecAdd/ecMul/ecPairing) — no Monad-specific dependency, so (unlike `MonadP256Adapter`) its tests run fully locally with no fork needed.
+- [x] `contracts/src/interfaces/IJudgesVerifier.sol` + `contracts/src/JudgesVerifier.sol` — combines the Groth16 verifier with `NullifierRegistry`. Two deliberate deviations from README §9.1's sketch (both explicitly licensed by that section's own "architectural target, not a final audited contract" caveat): `proof` is ABI-encoded Groth16 calldata rather than a fully generic blob, and `verify()` also takes `policyHash` (a genuine circuit public input) and `wallet` (needed for the nullifier event) — README's sketch omitted both.
+- [x] **Scope decision, documented in the contract itself**: `JudgesVerifier.verify()` does not take raw WebAuthn/P-256 signature bytes and does not call `MonadP256Adapter`. The signature was already checked once, off-chain, during the real WebAuthn ceremony that registered the credential (Phase 1) — the ZK proof's soundness transitively vouches for that, since `credentialSecret` is only derivable server-side for a credential that passed that ceremony. Re-checking the raw signature on every `verify()` call would mean shipping WebAuthn assertion bytes on-chain every time, defeating the point of proving the relationship in zero-knowledge. `MonadP256Adapter` stays available as a separately useful, independently tested building block (e.g. a future ERC-4337-style flow validating a live passkey signature per transaction).
+- [x] **`.gitignore` fix**: the frozen `judges_membership_final.zkey`, its `.wasm`, and `verification_key.json` are now committed on purpose (previously blanket-ignored) — `JudgesGroth16Verifier.sol`'s verification key is baked in from that exact zkey, so a fresh clone must be able to generate compatible proofs without re-running the trusted setup (which would produce a different, incompatible key). Ceremony intermediates (`.ptau`, `.r1cs`, `judges_membership_0000.zkey`) stay ignored — regeneratable from the circuit source, and the `.ptau` files especially are large.
+- [x] `prover/scripts/export_verifier_fixture.ts` — generates a real proof against a real witness and emits a Foundry test file directly (no manual transcription of proof/public-signal values, same reasoning as the P256 vector in Phase 3). Re-run whenever the circuit or trusted setup changes.
+
+**Verified**: 6/6 new Foundry tests in `contracts/test/JudgesVerifier.t.sol`, using a real snarkjs-generated proof accepted by the real onchain Groth16 verifier — a genuine off-chain/on-chain consistency check, not two independently-trusted halves. Covers: valid proof verifies + consumes the nullifier, replaying the same proof hits `NullifierAlreadyUsed`, and tampering with the wallet commitment / domain / policy hash each independently causes `InvalidProof` (SNARK soundness on the public inputs, same property Phase 5's off-chain tests rely on). Full suite: 19/19 Foundry tests passing (7 NullifierRegistry + 6 MonadP256Adapter + 6 JudgesVerifier).
+
+---
+
 ## 7. Phase 6 — SDK
 
 Goal: `@judges/sdk` hides WebAuthn + P256 + replay protection + nullifiers behind `register()` / `prove()` / `verify()` / `getPolicy()`.

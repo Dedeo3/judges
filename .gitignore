@@ -42,13 +42,21 @@ contracts/broadcast/*/1337/
 contracts/lib/
 *.pyc
 
-# --- Circom / snarkjs (ZK artifacts, large + regeneratable) ---
-prover/**/*.zkey
+# --- Circom / snarkjs ---
+# Most build/ceremony artifacts are large + regeneratable from the circuit source -- ignored.
+# EXCEPTION: the final frozen proving key (zkey), its wasm witness calculator, and the
+# verification key are committed on purpose. contracts/src/JudgesGroth16Verifier.sol embeds this
+# exact zkey's verification key as constants -- a fresh clone must be able to generate proofs
+# against the SAME zkey/wasm without re-running the trusted setup (which would produce a
+# different, incompatible key and break every already-deployed verifier). See prover/README.md.
+!prover/build/
+prover/build/*
+!prover/build/judges_membership_final.zkey
+!prover/build/verification_key.json
+!prover/build/judges_membership_js/
+prover/build/judges_membership_js/*
+!prover/build/judges_membership_js/judges_membership.wasm
 prover/**/*.ptau
-prover/**/*.r1cs
-prover/**/*.wasm
-prover/**/*.sym
-prover/build/
 prover/**/witness.wtns
 
 # --- Docker ---
