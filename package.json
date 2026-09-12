@@ -8,12 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "pnpm -r --if-present run build",
+    "build": "pnpm -r --if-present --filter='!@judges/prover' run build",
     "dev": "pnpm -r --if-present --parallel run dev",
     "lint": "pnpm -r --if-present run lint",
     "typecheck": "pnpm -r --if-present run typecheck",
-    "test": "pnpm -r --if-present run test",
+    "test": "pnpm -r --if-present --filter='!@judges/prover' run test",
     "test:contracts": "cd contracts && forge test",
+    "test:prover": "pnpm --filter @judges/prover run build && pnpm --filter @judges/prover run setup && pnpm --filter @judges/prover run test",
     "clean": "pnpm -r --if-present run clean"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
-import { createHash, createHmac } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { poseidon3 } from "poseidon-lite";
-import { toField } from "./field";
+import { hashToField, toField } from "./field";
 
 /**
  * Derives a per-credential secret from the server-held domain secret and the credential's
@@ -32,7 +32,7 @@ export function deriveCommitment(params: {
   credentialPublicKey: string;
   domainSeparator: string;
 }): bigint {
-  const publicKeyField = toField(createHash("sha256").update(params.credentialPublicKey).digest());
-  const domainField = toField(createHash("sha256").update(params.domainSeparator).digest());
+  const publicKeyField = hashToField(params.credentialPublicKey);
+  const domainField = hashToField(params.domainSeparator);
   return poseidon3([params.credentialSecret, publicKeyField, domainField]);
 }

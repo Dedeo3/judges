@@ -171,19 +171,25 @@ other domain                  -> different nullifier [PASS, vitest + forge test]
 
 Goal: hide the credential/commitment/nullifier relationship, not the WebAuthn signature itself.
 
-- [ ] Pick proving stack: Circom + snarkjs (per README §17) unless a spike shows a better fit.
-- [ ] Circuit public inputs: `applicationId, walletCommitment, nullifier, policyHash`.
-- [ ] Circuit private witness: `credential public key, WebAuthn challenge, assertion fields, credential secret, signature, credential metadata`.
-- [ ] Circuit statement exactly as README §8: assertion signs correct challenge; challenge bound to application; credential satisfies policy; nullifier correctly derived; commitment matches public commitment.
-- [ ] Do **not** start a full WebAuthn-in-circuit (Mode B) build — out of scope per README §20.
+- [x] Proving stack: Circom 2.2.3 + snarkjs 0.7.6 (Groth16), per README §17. `circom` isn't an npm package (Rust binary) — installed from the official `iden3/circom` v2.2.3 GitHub release; see `prover/README.md`.
+- [x] `prover/circuits/judges_membership.circom` — public inputs `walletCommitment, nullifier, applicationIdHash, policyHash`; private witness `credentialSecret, credentialPublicKeyHash`.
+- [x] **Deliberately narrowed scope vs. README §8's idealized 5-point statement** (documented in the circuit's own `@dev` comment, not a silent gap): this circuit proves points 4–5 only — "the nullifier is correctly derived" and "the resulting commitment matches the public commitment" — reusing `packages/crypto`'s exact Phase 4 Poseidon construction inside the circuit. It does **not** attempt points 1–2 (the WebAuthn assertion signs the correct challenge, bound to the application) — per README's own Mode A description, that's exactly the part that stays as direct onchain P256 verification (Phase 3), not ZK. Point 3 ("credential satisfies policy") has no real policy engine yet (README §26/V2), so `policyHash` is carried as an opaque public input rather than checked against real logic.
+- [x] `epoch` is a compile-time constant (`toField(sha256("default"))`, matching `packages/crypto`'s default), not a circuit input — no rotation policy exists yet, so there was nothing to parameterize.
+- [x] Added `packages/crypto`'s `deriveMembershipWitness` (+ `hashToField` helper, refactoring `deriveCommitment`/`deriveNullifier` to share it) — the single place that enforces "the same domain string feeds both the commitment and the nullifier," since the circuit unifies what the general TS API keeps as two separate parameters (`domainSeparator` vs `applicationId`). 3 new vitest tests confirm it matches the standalone functions and stays domain-separated.
+- [x] Confirmed **why `policyHash` as a bare, unconstrained public input is still meaningful**: Groth16 soundness binds every public signal into the verification equation — a proof fails to verify if the caller substitutes a different `policyHash` post-hoc, even though the circuit body never reads it. This is what makes "changed policy → proof fails" a real, enforced property today, ahead of an actual policy engine, without inventing fake policy logic to make the test pass.
+- [x] Did **not** start a full WebAuthn-in-circuit (Mode B) build — out of scope per README §20, and per Mode A's own definition above.
 
-**Acceptance test**:
+**Trusted setup — MVP-only, explicitly flagged**: `prover/scripts/trusted_setup.sh` runs a single-contributor, fully local Powers-of-Tau (bn128, power 12) + Groth16 phase-2 ceremony. This is standard for local dev/demo but is **not production-safe** — whoever ran that one contribution could in principle forge proofs. A real deployment needs either a multi-party ceremony or a well-known public Powers-of-Tau file plus an independent phase-2 contribution. (A first attempt to reuse a public Hermez/zkevm-hosted `.ptau` mirror hit `AccessDenied` on both known hosts — bucket permissions apparently changed since they were documented — so generating fresh was the pragmatic MVP choice; revisit before any real deployment.)
+
+**Verified**: `pnpm run test:prover` (builds the circuit, runs the local trusted setup, then the acceptance script) — all 4 acceptance checks pass end-to-end against a real Groth16 proof/verify, not a mocked stand-in. `packages/crypto` — 14/14 vitest tests total (11 from Phase 4 + 3 new `deriveMembershipWitness` tests). Kept out of the default `pnpm run build`/`pnpm run test` sweep (`--filter='!@judges/prover'`) since it needs the `circom` binary and a multi-minute local trusted-setup run that CI doesn't have set up — same reasoning as `contracts` getting its own `test:contracts` script instead of joining the plain Node test sweep.
+
+**Acceptance test** — confirmed via `pnpm run test:prover`:
 
 ```text
-correct witness -> proof verifies
-changed secret  -> proof fails
-changed domain  -> proof fails
-changed policy  -> proof fails
+correct witness -> proof verifies    [PASS]
+changed secret  -> proof fails       [PASS]
+changed domain  -> proof fails       [PASS]
+changed policy  -> proof fails       [PASS]
 ```
 
 ---

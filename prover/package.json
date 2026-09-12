@@ -1,0 +1,21 @@
+{
+  "name": "@judges/prover",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "bash scripts/build_circuit.sh",
+    "setup": "bash scripts/trusted_setup.sh",
+    "test": "tsx scripts/test_acceptance.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@judges/crypto": "workspace:*",
+    "snarkjs": "^0.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "circomlib": "^2.0.5",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

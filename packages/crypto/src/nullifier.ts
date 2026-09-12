@@ -1,8 +1,7 @@
-import { createHash } from "node:crypto";
 import { poseidon3 } from "poseidon-lite";
-import { toField } from "./field";
+import { hashToField } from "./field";
 
-const DEFAULT_EPOCH = "default";
+export const DEFAULT_EPOCH = "default";
 
 /**
  * nullifier = Poseidon(credential_secret, applicationId, epoch) — README §7.5.
@@ -19,7 +18,7 @@ export function deriveNullifier(params: {
   applicationId: string;
   epoch?: string | number;
 }): bigint {
-  const applicationField = toField(createHash("sha256").update(params.applicationId).digest());
-  const epochField = toField(createHash("sha256").update(String(params.epoch ?? DEFAULT_EPOCH)).digest());
+  const applicationField = hashToField(params.applicationId);
+  const epochField = hashToField(String(params.epoch ?? DEFAULT_EPOCH));
   return poseidon3([params.credentialSecret, applicationField, epochField]);
 }
