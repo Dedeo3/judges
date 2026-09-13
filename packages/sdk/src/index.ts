@@ -1,63 +1,83 @@
 import { startAuthentication } from "@simplewebauthn/browser";
 import { createPublicClient, http as viemHttp, type Address, type Chain, type WalletClient } from "viem";
 import { judgesVerifierAbi } from "./abi";
+import { isValidAppId, namespacedAppId, normalizeOrigin } from "./connect";
 import { postJson } from "./http";
-import type { JudgesConfig, JudgesProof, Network, VerifyOnchainResult } from "./types";
+import { requestProofViaPopup } from "./popup";
+import { assertProofMatchesRequest, toJudgesProof, type ProveApiResponse } from "./proof";
+import type { AssuranceLevel, JudgesConfig, JudgesProof, Network, VerifyOnchainResult } from "./types";
 
 export * from "./types";
 export { judgesVerifierAbi } from "./abi";
 export { JudgesApiError } from "./http";
+export { JudgesPopupError } from "./popup";
+export { assertProofMatchesRequest, toJudgesProof, type ProveApiResponse } from "./proof";
+export {
+  ASSURANCE_LEVELS,
+  CONNECT_PATH,
+  buildConnectUrl,
+  isConnectMessageFor,
+  isValidAppId,
+  isValidProofAppId,
+  namespacedAppId,
+  normalizeOrigin,
+  parseConnectRequest,
+  referrerMatchesOrigin,
+  type ConnectMessage,
+  type ConnectRequest,
+} from "./connect";
 
 const DEFAULT_MAX_RETRIES = 2;
-
-function defaultApiBaseUrl(): string {
-  if (typeof window !== "undefined") return "/api";
-  throw new Error(
-    "JudgesConfig.apiBaseUrl is required outside a browser (no same-origin '/api' to fall back to)",
-  );
-}
-
-interface ProveApiResponse {
-  verified: boolean;
-  reason?: string;
-  proof?: `0x${string}`;
-  walletCommitment?: `0x${string}`;
-  nullifier?: `0x${string}`;
-  domain?: `0x${string}`;
-  contextHash?: `0x${string}`;
-  wallet?: `0x${string}`;
-}
 
 /**
  * Hides WebAuthn ceremonies, proof preparation, and Monad RPC interaction behind three calls —
  * README §11:
  *
  * ```ts
- * const judges = new Judges({ network: "monad-testnet", appId: "my-dapp" });
- * const proof = await judges.prove({ assurance: "user_verified" });
- * const result = await judges.verify(proof, { walletClient, verifierAddress });
+ * const judges = new Judges({ network: "monad-testnet", appId: "my-dapp", judgesOrigin: "https://judges.example" });
+ * const proof = await judges.prove({ assurance: "user_verified", wallet });
+ * const result = await judges.verify(proof, { walletClient, verifierAddress, chain });
  * ```
  */
 export class Judges {
   private readonly network: Network;
   private readonly appId: string;
+  private readonly judgesOrigin: string | null;
   private readonly apiBaseUrl: string;
   private readonly maxRetries: number;
+  private readonly popupTimeoutMs: number | undefined;
 
   constructor(config: JudgesConfig) {
+    if (!isValidAppId(config.appId)) {
+      throw new Error(`Invalid appId "${config.appId}": lowercase letters, digits, . _ -; max 64 chars`);
+    }
+    if (config.judgesOrigin !== undefined && !normalizeOrigin(config.judgesOrigin)) {
+      throw new Error(`Invalid judgesOrigin "${config.judgesOrigin}": expected an https origin with no path`);
+    }
+
     this.network = config.network;
     this.appId = config.appId;
-    this.apiBaseUrl = config.apiBaseUrl ?? defaultApiBaseUrl();
+    this.judgesOrigin = config.judgesOrigin ? normalizeOrigin(config.judgesOrigin) : null;
+    this.apiBaseUrl = config.apiBaseUrl ?? "/api";
     this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.popupTimeoutMs = config.popupTimeoutMs;
+  }
+
+  /** True when proofs must be requested through the Judges popup rather than same-origin APIs. */
+  get usesPopup(): boolean {
+    if (!this.judgesOrigin) return false;
+    return typeof window === "undefined" || window.location.origin !== this.judgesOrigin;
   }
 
   /**
-   * Runs a full passkey authentication ceremony in the browser, then asks the Judges backend to
-   * turn the result into a ZK membership proof. The credential secret never leaves the server —
-   * this call only ever sees the finished proof.
+   * Runs a passkey ceremony and returns a ZK membership proof bound to `wallet`. The credential
+   * secret never leaves the Judges server — this call only ever sees the finished proof.
+   *
+   * From a third-party site (see `judgesOrigin`), this opens a Judges popup, so **call it
+   * directly from a click handler**: browsers block popups opened after an `await`.
    */
-  async prove(params: {
-    assurance: import("@judges/types").AssuranceLevel;
+  prove(params: {
+    assurance: AssuranceLevel;
     /** The wallet this proof is bound to — required, so a lifted proof can't be redirected. */
     wallet: Address;
     /**
@@ -66,52 +86,46 @@ export class Judges {
      */
     contextHash?: `0x${string}`;
   }): Promise<JudgesProof> {
-    const { sessionId, options } = await postJson<{ sessionId: string; options: unknown }>(
-      `${this.apiBaseUrl}/webauthn/auth/options`,
-      {},
-      this.maxRetries,
-    );
-
-    // Not retried: a WebAuthn assertion is tied to one server-issued, single-use challenge, so
-    // resubmitting it (or restarting the ceremony) after a partial failure needs a fresh call
-    // from the top, not a blind retry of the same request.
-    const response = await startAuthentication({ optionsJSON: options as Parameters<typeof startAuthentication>[0]["optionsJSON"] });
-
-    const result = await postJson<ProveApiResponse>(
-      `${this.apiBaseUrl}/prove`,
-      {
-        sessionId,
-        response,
-        appId: this.appId,
-        assurance: params.assurance,
-        wallet: params.wallet,
-        contextHash: params.contextHash,
-      },
-      this.maxRetries,
-    );
-
-    if (
-      !result.verified ||
-      !result.proof ||
-      !result.walletCommitment ||
-      !result.nullifier ||
-      !result.domain ||
-      !result.contextHash ||
-      !result.wallet
-    ) {
-      throw new Error(`Judges.prove failed: ${result.reason ?? "unknown reason"}`);
+    // Not `async`, and no await before this branch: the popup must open synchronously inside the
+    // caller's click handler.
+    if (this.usesPopup) {
+      return requestProofViaPopup({
+        judgesOrigin: this.judgesOrigin!,
+        request: {
+          appId: this.appId,
+          assurance: params.assurance,
+          wallet: params.wallet,
+          contextHash: params.contextHash,
+        },
+        timeoutMs: this.popupTimeoutMs,
+      }).then((payload) => {
+        const proof = toJudgesProof(payload as ProveApiResponse, params.assurance, null);
+        assertProofMatchesRequest(proof, {
+          appId: namespacedAppId(window.location.origin, this.appId),
+          wallet: params.wallet,
+          contextHash: params.contextHash,
+        });
+        return proof;
+      });
     }
 
-    return {
-      proof: result.proof,
-      walletCommitment: result.walletCommitment,
-      nullifier: result.nullifier,
-      domain: result.domain,
-      contextHash: result.contextHash,
-      wallet: result.wallet,
+    return this.proveSameOrigin(params);
+  }
+
+  private async proveSameOrigin(params: {
+    assurance: AssuranceLevel;
+    wallet: Address;
+    contextHash?: `0x${string}`;
+  }): Promise<JudgesProof> {
+    const result = await runProveCeremony({
+      apiBaseUrl: this.apiBaseUrl,
       appId: this.appId,
       assurance: params.assurance,
-    };
+      wallet: params.wallet,
+      contextHash: params.contextHash,
+      maxRetries: this.maxRetries,
+    });
+    return toJudgesProof(result, params.assurance, this.appId);
   }
 
   /**
@@ -169,4 +183,50 @@ export class Judges {
       args: [params.domain, params.nullifier],
     });
   }
+}
+
+/**
+ * The raw passkey ceremony + proof request against same-origin Judges APIs, returning the API
+ * response untouched. Only meaningful on the Judges origin itself (passkeys are scoped to it).
+ *
+ * Exported for Judges' own /connect page, which proves under a namespaced app id
+ * (`https://site/app`) that the integrator-facing `Judges` constructor deliberately refuses.
+ * Integrators should use `Judges.prove()`.
+ */
+export async function runProveCeremony(params: {
+  apiBaseUrl?: string;
+  appId: string;
+  assurance: AssuranceLevel;
+  wallet: string;
+  contextHash?: string;
+  maxRetries?: number;
+}): Promise<ProveApiResponse> {
+  const apiBaseUrl = params.apiBaseUrl ?? "/api";
+  const maxRetries = params.maxRetries ?? DEFAULT_MAX_RETRIES;
+
+  const { sessionId, options } = await postJson<{ sessionId: string; options: unknown }>(
+    `${apiBaseUrl}/webauthn/auth/options`,
+    {},
+    maxRetries,
+  );
+
+  // Not retried: a WebAuthn assertion is tied to one server-issued, single-use challenge, so
+  // resubmitting it (or restarting the ceremony) after a partial failure needs a fresh call
+  // from the top, not a blind retry of the same request.
+  const response = await startAuthentication({
+    optionsJSON: options as Parameters<typeof startAuthentication>[0]["optionsJSON"],
+  });
+
+  return postJson<ProveApiResponse>(
+    `${apiBaseUrl}/prove`,
+    {
+      sessionId,
+      response,
+      appId: params.appId,
+      assurance: params.assurance,
+      wallet: params.wallet,
+      contextHash: params.contextHash,
+    },
+    maxRetries,
+  );
 }

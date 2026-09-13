@@ -666,12 +666,13 @@ import { Judges } from "@judges/sdk";
 
 const judges = new Judges({
   network: "monad-testnet",
-  appId: "my-dapp" // domain-separates your nullifiers from every other app
+  appId: "my-dapp",                        // namespaced under your origin: https://your.site/my-dapp
+  judgesOrigin: "https://judges.example"   // where Judges is deployed
 });
 
-// Runs the passkey ceremony in the browser, then has the backend turn it into a ZK proof.
-// `wallet` is required: the proof is bound to it, so a proof lifted from the mempool is
-// useless to anyone else (§7.2).
+// Opens a Judges popup (call it from a click handler), runs the passkey ceremony there, and
+// returns only the ZK proof. `wallet` is required: the proof is bound to it, so a proof lifted
+// from the mempool is useless to anyone else (§7.2).
 const proof = await judges.prove({
   assurance: "user_verified",
   wallet: account
@@ -708,6 +709,27 @@ The SDK hides:
 - verification result normalization.
 
 `getPolicy()` is not implemented: there is no policy engine to query yet (§26).
+
+### Third-party sites
+
+Passkeys are bound to the relying party that created them, so a Judges passkey can only be
+exercised on the Judges origin — a third-party site cannot run the ceremony itself. The SDK
+therefore opens a popup on the Judges origin (`/connect`), which shows the user who is asking, for
+which wallet and app, runs the ceremony, and posts only the proof back.
+
+Two properties make that safe to expose to any site without an allowlist:
+
+- **Every app id is namespaced under the requesting origin** (`https://your.site/my-dapp`). A
+  malicious site can get a user to tap their passkey, but can only act inside its own namespace —
+  never spend that user's one-per-app action inside someone else's airdrop or DAO.
+- **The proof is posted with `targetOrigin` set to the claimed requesting origin**, so a site lying
+  about its origin never receives the proof.
+
+The SDK additionally accepts a message only from the exact popup window with its own random request
+id, and rejects any proof for a different app, wallet or action than requested. These are checked
+across two real origins in a headless Chrome by `examples/external-dapp/e2e/popup.e2e.mjs`, and the
+packed SDK is verified to install and typecheck in a project outside this repository. See
+`docs/integration.md`.
 
 ---
 

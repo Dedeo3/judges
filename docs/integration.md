@@ -1,24 +1,33 @@
 # Integration Guide
 
-How an external app integrates `@judges/sdk` to verify that a wallet is backed by a real,
-user-verified passkey — no identity disclosure, no KYC.
+How a third-party app integrates `@judges/sdk` to verify that a wallet is backed by a real,
+user-verified passkey — no identity disclosure, no KYC, no registration with Judges.
+
+A runnable version of everything below lives in [`examples/external-dapp`](../examples/external-dapp).
 
 ## Install
 
-Inside this monorepo, any workspace package can depend on it directly:
-
-```json
-{
-  "dependencies": {
-    "@judges/sdk": "workspace:*"
-  }
-}
-```
-
-Outside the monorepo (a genuinely external integrator), once the package is published:
-
 ```bash
 npm install @judges/sdk
+```
+
+Until the package is on npm, install a packed tarball — see `examples/external-dapp/README.md`.
+Inside this monorepo, workspace packages use `"@judges/sdk": "workspace:*"`.
+
+## How it works from your site
+
+Passkeys are bound to the site that created them, so a Judges passkey can only be used on the
+Judges origin. Your site therefore never runs the ceremony itself:
+
+```text
+your site                         Judges origin (popup)
+─────────                         ─────────────────────
+judges.prove()  ── window.open ─▶ /connect
+                                    shows who's asking, which wallet, which app
+                                    passkey ceremony (Touch ID / Windows Hello / phone)
+                                    /api/prove → ZK proof
+                ◀─ postMessage ──  proof only, to your exact origin
+judges.verify() ─▶ JudgesVerifier on Monad
 ```
 
 ## Usage
@@ -28,44 +37,69 @@ import { Judges } from "@judges/sdk";
 
 const judges = new Judges({
   network: "monad-testnet",
-  appId: "my-dapp", // domain-separates your app's nullifiers from every other app
+  appId: "airdrop",                        // your app's id within your own namespace
+  judgesOrigin: "https://judges.example",  // where Judges is deployed
 });
 
-// 1. Runs the WebAuthn ceremony in the browser, then asks the Judges backend to turn the
-//    result into a ZK proof. The credential secret never leaves the server.
-//    `wallet` is required: the proof is cryptographically bound to it, so a proof sitting in
-//    the mempool can't be lifted and submitted by someone else.
-const proof = await judges.prove({
-  assurance: "user_verified",
-  wallet: account, // the address that will submit the proof
-});
+button.addEventListener("click", async () => {
+  // Opens the popup — call it directly from the click handler, before any `await`,
+  // or the browser blocks it.
+  const proof = await judges.prove({
+    assurance: "user_verified",
+    wallet: account, // the proof is bound to this wallet
+  });
 
-// 2. Submits the proof to JudgesVerifier.verify() on Monad using YOUR connected wallet client
-//    (the SDK never holds a signer) and consumes the nullifier for your app's domain.
-const result = await judges.verify(proof, {
-  walletClient, // a viem WalletClient with a connected account
-  verifierAddress: "0x...", // JudgesVerifier's deployed address (see docs/architecture.md)
-  chain: monadTestnet, // a viem Chain definition for Monad Testnet
-});
+  // Submits to JudgesVerifier.verify() using YOUR wallet client — the SDK never holds a signer.
+  const result = await judges.verify(proof, {
+    walletClient,
+    verifierAddress: "0x...", // see docs/architecture.md
+    chain: monadTestnet,
+  });
 
-if (result.valid) {
-  // allow the action — this wallet just proved a real, user-verified passkey authorized it,
-  // and can't reuse the same proof again in your domain (nullifier consumed on-chain).
-}
+  if (result.valid) {
+    // allow the action — this wallet is backed by a user-verified passkey, and that passkey
+    // can't be used for this action again in your app (nullifier consumed on-chain).
+  }
+});
 ```
 
-### Binding a proof to a specific action
+## Your namespace, and deploying your contract
 
-By default a proof is bound to the wallet but not to any particular action, which is fine for a
-plain "is this a verified human" gate. When the action itself matters — *which* way you voted,
-*which* agent you registered — bind it, or a third party could lift the proof and point it at a
-different action.
-
-Your contract defines the binding and exposes it as a view function, so there's exactly one
-definition and nothing to reimplement in TypeScript:
+Every proof requested from your site is scoped to **your origin**. With `appId: "airdrop"` on
+`https://your.site`, the effective app id is `https://your.site/airdrop`:
 
 ```ts
-// The DAO contract computes the binding from its own arguments.
+import { namespacedAppId } from "@judges/sdk";
+namespacedAppId(window.location.origin, "airdrop"); // "https://your.site/airdrop"
+```
+
+Deploy your consuming contract with the domain derived from that full string:
+
+```solidity
+bytes32 domain = bytes32(JudgesField.hashToField("https://your.site/airdrop"));
+```
+
+`proof.appId` and `proof.domain` in the returned proof are exactly these values.
+
+Why this exists: without it, any site could open the Judges popup, get a user to tap their passkey,
+and spend that user's one-per-app action inside *your* airdrop or DAO. Namespacing by origin means a
+site can only ever act within its own space — and it needs no allowlist or registration with Judges,
+so nobody has to ask permission to integrate.
+
+Pick one canonical origin. `https://www.your.site` and `https://your.site` are different namespaces,
+so a user could act once on each.
+
+## Binding a proof to a specific action
+
+By default a proof is bound to the wallet but not to any particular action — fine for a plain "is
+this a verified user" gate. When the action matters — *which* way someone voted, *which* agent they
+registered — bind it, or a third party could lift the proof from the mempool and point it at a
+different action.
+
+Your contract defines the binding and exposes it as a view, so there's one definition and nothing
+to reimplement in TypeScript:
+
+```ts
 const contextHash = await publicClient.readContract({
   address: daoAddress,
   abi: daoAbi,
@@ -75,13 +109,10 @@ const contextHash = await publicClient.readContract({
 
 const proof = await judges.prove({ assurance: "user_verified", wallet: account, contextHash });
 
-// The DAO passes the same binding to JudgesVerifier internally, so this proof only works for
-// this proposal, this vote direction, and this wallet.
 await daoContract.write.vote([proposalId, support, proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet]);
 ```
 
-See `contracts/src/demos/` for three worked examples (DAO voting, an AI agent registry, and a
-sybil-resistant faucet).
+`contracts/src/demos/` has three worked examples: DAO voting, an AI agent registry, and a faucet.
 
 ### Checking a nullifier without a wallet
 
@@ -94,34 +125,62 @@ const used = await judges.isNullifierUsed({
 });
 ```
 
+## Requirements for your page
+
+- **Call `prove()` from a user gesture.** Otherwise it rejects with `JudgesPopupError` code
+  `popup_blocked`.
+- **Don't send `Cross-Origin-Opener-Policy: same-origin`.** It severs your page's link to the popup
+  and the proof can't come back. `same-origin-allow-popups` works.
+- **No CORS setup is needed.** Your site never calls the Judges API directly.
+
+## Errors
+
+`prove()` rejects with `JudgesPopupError`:
+
+| `code` | meaning |
+|---|---|
+| `popup_blocked` | not called from a user gesture |
+| `cancelled` | the user pressed Cancel in the popup |
+| `closed` | the user closed the popup |
+| `timeout` | no answer within `popupTimeoutMs` (default 5 minutes) |
+| `failed` | the request itself was invalid |
+
+A proof that comes back for a different app, wallet, or action than requested is rejected with a
+plain `Error` naming the field. Treat that as an integration bug, not a user error.
+
 ## What the SDK hides
 
-- WebAuthn challenge creation and the browser ceremony (`@simplewebauthn/browser`)
-- Server-side credential-secret derivation and ZK proof generation (never exposed to the client)
-- The wallet/action binding (`policyHash = sha256(contextHash ‖ wallet) mod FIELD_PRIME`) — you
-  pass a wallet and optionally a context; the SDK and `JudgesVerifier` agree on the rest
-- ABI encoding of the Groth16 proof for `JudgesVerifier.verify()`
-- Retries on transient API failures (network errors, 5xx — not 4xx, and not a WebAuthn ceremony
-  itself, since a consumed challenge can't be resubmitted)
-- Normalizing the on-chain result into `{ valid, txHash, domain, nullifier }`
+- The popup handshake and its security checks (origin, window, request id)
+- The WebAuthn ceremony (`@simplewebauthn/browser`)
+- Server-side credential-secret derivation and ZK proof generation
+- The wallet/action binding (`policyHash = sha256(contextHash ‖ wallet) mod FIELD_PRIME`)
+- ABI encoding of the Groth16 proof
+- Normalising the on-chain result into `{ valid, txHash, domain, nullifier }`
 
-## Requirements
+## Security model of the popup
 
-- The app must be served from an origin the Judges backend's `RP_ID`/`RP_ORIGIN` recognizes (see
-  `.env.example`) — WebAuthn is origin-scoped by design.
-- `verifierAddress` and `chain` must point at a real deployed `JudgesVerifier` — see
-  `docs/architecture.md` for the current Testnet/Mainnet addresses.
+Enforced by `packages/sdk/src/connect.ts` and `apps/web/src/app/connect/`:
 
-## Status (honest, as of Phase 6)
+| Attack | What stops it |
+|---|---|
+| A site spends a user's action inside another site's app | App id always namespaced under the requesting origin |
+| A site claims another origin to borrow its namespace | Proof is posted with `targetOrigin` = the claimed origin, so the real opener never receives it |
+| A site claims another origin to show a trusted name | Referrer must match the claimed origin, or the popup refuses |
+| Another window forges a "proof" message | SDK accepts only the exact Judges origin, the exact popup window, and its own random request id |
+| A proof for the wrong app/wallet/action slips through | SDK checks the returned proof against the request |
+| The consent screen is framed under a decoy | `X-Frame-Options: DENY` and `frame-ancestors 'none'` on `/connect` |
 
-This has been verified: the SDK package compiles, typechecks, and the exact code shape above
-matches what `apps/web`'s API routes (`/api/webauthn/auth/*`, `/api/prove`) and
-`contracts/src/JudgesVerifier.sol` actually implement — traced end-to-end by reading the code,
-not assumed.
+Verified in a real Chrome engine by `examples/external-dapp/e2e/popup.e2e.mjs` (15 checks across two
+origins). That test injects the proof message rather than running a real passkey ceremony, which
+needs the deployed backend and a real authenticator.
 
-**Not yet verified**: an actual `prove()` → `verify()` round trip against live infrastructure.
-That needs three things this repo doesn't have yet: Neon/Upstash credentials provisioned (Phase
-1/2's same open item), `JudgesVerifier` actually deployed to Monad Testnet (Phase 8), and a real
-platform authenticator (Phase 1's same limitation — an automated browser has no Touch ID/Windows
-Hello/phone to complete the ceremony with). Do this manually once those exist, before treating
-this integration as production-ready.
+## Status
+
+**Verified**: the SDK installs from its packed tarball into a project outside this monorepo, and
+typechecks there under TypeScript's strictest resolution (`NodeNext`, `strict`,
+`skipLibCheck: false`); it imports in Node without crashing (so SSR frameworks can load it); and the
+cross-origin popup flow and its attack cases pass in a real Chrome engine.
+
+**Not yet verified**: a full `prove()` → `verify()` round trip on live infrastructure. That needs
+the backend deployed with Upstash/Neon, `JudgesVerifier` on Monad Testnet, and a real platform
+authenticator — see `docs/deployment.md`.

@@ -1,21 +1,39 @@
-import type { AssuranceLevel } from "@judges/types";
-
-export type { AssuranceLevel };
+/**
+ * Defined here rather than imported from the monorepo's @judges/types: this package is published
+ * to npm, and a dependency on an unpublished workspace package would make it uninstallable.
+ */
+export type AssuranceLevel = "possession" | "user_verified" | "unique";
 
 export type Network = "monad-testnet" | "monad-mainnet";
 
 export interface JudgesConfig {
   network: Network;
-  /** Domain-separates this app's commitments/nullifiers from every other app (README §7.5). */
+  /**
+   * Domain-separates this app's commitments/nullifiers from every other app (README §7.5).
+   * Lowercase letters, digits, `.`, `_`, `-`; max 64.
+   *
+   * When proving through the popup (see `judgesOrigin`), the effective app id is namespaced under
+   * your site's origin — `https://your.site/<appId>` — and that full string is what your contract
+   * must be deployed with. `proof.appId` returns it.
+   */
   appId: string;
   /**
-   * Base URL for the Judges API routes. Defaults to same-origin "/api" in a browser — set this
-   * explicitly when the SDK runs somewhere without a same-origin API (a different host, a
-   * script outside the Next.js app, apps/demo-agent, etc).
+   * Origin of the Judges deployment, e.g. "https://judges.example". Set this when your site is NOT
+   * served from that origin — which is every third-party integration. Passkeys are scoped to the
+   * relying party, so the ceremony has to run on Judges' own origin: the SDK opens a popup there
+   * and receives the finished proof back.
+   *
+   * Leave unset only when your pages are served from the Judges origin itself.
+   */
+  judgesOrigin?: string;
+  /**
+   * Base URL for the Judges API routes, used only in same-origin mode. Defaults to "/api".
    */
   apiBaseUrl?: string;
   /** Retry attempts for API calls that fail transiently (network errors, 5xx). Default: 2. */
   maxRetries?: number;
+  /** How long to wait for the popup flow before giving up. Default: 5 minutes. */
+  popupTimeoutMs?: number;
 }
 
 /**

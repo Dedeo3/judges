@@ -1,18 +1,39 @@
 {
   "name": "@judges/sdk",
   "version": "0.1.0",
-  "private": true,
+  "description": "Verify that a wallet is backed by a user-verified passkey, privately, on Monad.",
+  "license": "MIT",
+  "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/add-dist-extensions.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepack": "pnpm run build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      }
+    }
   },
   "dependencies": {
-    "@judges/types": "workspace:*",
     "@simplewebauthn/browser": "^11.0.0",
     "viem": "^2.21.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }

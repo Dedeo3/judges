@@ -14,6 +14,24 @@ const nextConfig: NextConfig = {
       "../../prover/build/judges_membership_js/judges_membership.wasm",
     ],
   },
+
+  async headers() {
+    return [
+      {
+        // The consent popup must never be framed. If another site could embed it, it could lay a
+        // decoy over the "Verify with passkey" button and trick a tap (clickjacking).
+        //
+        // Note what is deliberately NOT set: Cross-Origin-Opener-Policy: same-origin. That would
+        // sever `window.opener`, and the popup would have no way to hand the proof back.
+        source: "/connect",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -296,6 +296,33 @@ Split by who can do it: everything automatable is built and tested here; the res
 
 **This phase's completion = the hackathon submission.** Do not proceed to Phase 9 until §8b is done and demoed.
 
+### 8c. Third-party integration — found against the hackathon's criteria
+
+**Found while mapping the build against the track's judging criteria**: no site other than Judges' own could use Judges at all, and nobody outside this repo could install the SDK. That quietly blocked the two heaviest criteria — Traction (20%) explicitly counts "even one other team integrating it", and Design & Craft (20%) is developer experience — since an integrator would hit a wall on step one. Specifically: passkeys are scoped to the relying party, so another origin can't run a Judges ceremony; `/api/prove` verified a single expected origin and sent no CORS headers; the SDK was only ever exercised same-origin; and `@judges/sdk` was `"private": true`, depended on an unpublished workspace package, and pointed `main` at TypeScript source.
+
+- [x] **Popup handshake** (`packages/sdk/src/connect.ts`, `popup.ts`; `apps/web/src/app/connect/`). The SDK opens `/connect` on the Judges origin, which runs the ceremony and posts back only the proof. No CORS was opened; the API stays same-origin.
+- [x] **Threat model, designed before coding**: a malicious site can open the popup and get a user to tap. A consent screen alone relies on the user noticing, so the real guarantees are structural:
+  - every app id from the popup is **namespaced under the requesting origin** — a site can only spend a user's action inside its own namespace, never inside another site's airdrop — with no allowlist, keeping integration permissionless;
+  - the proof is posted with **`targetOrigin` = the claimed origin**, so lying about your origin gets you nothing;
+  - the referrer must match the claimed origin, so a site can't borrow a trusted name for the consent screen;
+  - the SDK accepts only the exact Judges origin, the exact popup window, and its own random request id, then checks the returned proof's app/wallet/action against the request;
+  - `/connect` sends `X-Frame-Options: DENY` + `frame-ancestors 'none'` (clickjacking), and deliberately does **not** send `COOP: same-origin`, which would sever `window.opener`.
+- [x] **Server-side app-id validation** in `/api/prove` (`isValidProofAppId`): only a plain first-party id or one namespaced exactly as the popup produces reaches the domain hash; wallet, assurance and context hash validated too.
+- [x] **Publishable SDK**: `AssuranceLevel` inlined (dropping the unpublished `@judges/types` dependency), ESM build to `dist` with declarations, `publishConfig` swapping `main`/`types`/`exports` to `dist` at pack time, and an npm-facing `packages/sdk/README.md`.
+- [x] **Found and fixed while building it**: writing `.js` extensions on the SDK's relative imports (needed by Node ESM and `NodeNext` consumers) broke the web app — Turbopack consuming the workspace source can't resolve `./x.js` to `./x.ts`. Source is back to extensionless and `scripts/add-dist-extensions.mjs` adds the extensions to the build output only.
+- [x] **Found and fixed**: the consent page initially set state in an effect (`react-hooks/set-state-in-effect`). It's now a client-only component (`next/dynamic` with `ssr: false`) whose initial state is computed synchronously — there's no server render to reconcile, since the page is meaningless without `window.opener`.
+- [x] **`examples/external-dapp`**: a separate project outside the pnpm workspace that installs the SDK from its packed tarball, exactly as an integrator would — also something to hand another team and to show in the demo video. `npm audit` flagged its esbuild version (a dev-server advisory it doesn't use); bumped anyway so the example ships clean.
+
+**Verified**:
+- SDK: 52 vitest tests on the security helpers (origin normalisation rejecting paths/credentials/non-web schemes/plain-http non-loopback, namespace escape attempts, every request field, referrer matching, message shape, proof shape and request matching).
+- Packed tarball installed into a project outside the repo: typechecks under `NodeNext` + `strict` + `skipLibCheck: false`, and imports in Node without crashing (so SSR frameworks can load it).
+- **15/15 cross-origin checks in a real Chrome engine** (`examples/external-dapp/e2e/popup.e2e.mjs`, isolated throwaway profile, Judges on :3000 and the dApp on :4000): consent names the real site/namespace/wallet; cancel and close both reject `prove()` instead of hanging; a forged origin is refused; a message targeted at the wrong origin is dropped by the browser while the correctly targeted control arrives; a proof message from a Judges window other than the opened popup is ignored; the same message from the real popup is accepted; a proof for another app's namespace is rejected; the anti-framing headers are present and no severing COOP is set.
+- The in-app browser pane turned out not to support real popups (`window.open` navigated the same tab) — which did confirm the "no opener" guard, but meant the round trip needed a real Chrome.
+
+**Not verified, stated plainly**: the E2E injects the proof message from the popup window rather than running a passkey ceremony and generating a real proof, because that needs the deployed backend (Upstash/Neon) and a real authenticator. The message shape and `postMessage` call are identical to `ConnectFlow`'s, but the post-ceremony code path itself has not run.
+
+**Still open for Traction**: publishing to npm (needs an npm account and a decision on the `@judges` scope), and actually getting a team to integrate.
+
 ---
 
 ## 10. Phase 9 — Mainnet Promotion (only after Testnet is proven)

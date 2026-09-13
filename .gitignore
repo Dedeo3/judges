@@ -78,7 +78,14 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
+# --- Packed npm tarballs (regenerate with `pnpm pack`) ---
+*.tgz
+
 # --- Misc local scratch ---
 *.tmp
 *.bak
 .cache/
+
+# The external-dapp example installs @judges/sdk from a locally packed tarball whose integrity hash
+# changes on every repack, so a committed lockfile would break `npm ci` for everyone else.
+examples/external-dapp/package-lock.json

@@ -122,6 +122,12 @@ Two things that will bite otherwise:
   every ceremony fail with an opaque browser error. Preview deployments get different hostnames,
   so passkeys registered on one won't work on another.
 
+Third-party sites reach Judges through the `/connect` popup on this same deployment, so no extra
+configuration is needed for them: `RP_ID`/`RP_ORIGIN` stay Judges' own hostname, and integrators set
+`judgesOrigin` to it in the SDK. Give integrators the **production** hostname — a Vercel preview
+URL is a different origin with a different `RP_ID`, so passkeys registered on one won't work on
+the other.
+
 The wasm + proving key that `/api/prove` reads are pulled into the function bundle by
 `outputFileTracingRoot`/`outputFileTracingIncludes` in `apps/web/next.config.ts`. Verified by
 building with the gitignored prover artifacts moved aside: the two committed files are traced, and

@@ -1,0 +1,22 @@
+{
+  "name": "judges-external-dapp-example",
+  "private": true,
+  "type": "module",
+  "description": "A third-party site integrating Judges through the published @judges/sdk package.",
+  "scripts": {
+    "pack-sdk": "cd ../../packages/sdk && pnpm pack --pack-destination ../../examples/external-dapp",
+    "setup": "npm run pack-sdk && npm install",
+    "build": "esbuild src/main.ts --bundle --format=esm --target=es2022 --outfile=dist/main.js && cp index.html dist/index.html",
+    "typecheck": "tsc --noEmit",
+    "serve": "node scripts/serve.mjs",
+    "e2e": "node e2e/popup.e2e.mjs"
+  },
+  "dependencies": {
+    "@judges/sdk": "file:judges-sdk-0.1.0.tgz"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.6.0",
+    "puppeteer-core": "^23.0.0"
+  }
+}

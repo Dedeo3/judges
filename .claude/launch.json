@@ -4,8 +4,20 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@judges/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@judges/web",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "external-dapp",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "examples/external-dapp/scripts/serve.mjs"
+      ],
+      "port": 4000
     }
   ]
 }

@@ -260,9 +260,6 @@ importers:
 
   packages/sdk:
     dependencies:
-      '@judges/types':
-        specifier: workspace:*
-        version: link:../types
       '@simplewebauthn/browser':
         specifier: ^11.0.0
         version: 11.0.0
@@ -273,6 +270,9 @@ importers:
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.2)(lightningcss@1.32.0)
 
   packages/types:
     devDependencies:
