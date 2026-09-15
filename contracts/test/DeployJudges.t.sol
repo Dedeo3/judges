@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {DeployJudges} from "../script/DeployJudges.s.sol";
 import {NullifierRegistry} from "../src/NullifierRegistry.sol";
+import {CommitmentTree} from "../src/CommitmentTree.sol";
 import {JudgesVerifier} from "../src/JudgesVerifier.sol";
 import {MonadP256Adapter} from "../src/MonadP256Adapter.sol";
 import {SybilResistantDAO} from "../src/demos/SybilResistantDAO.sol";
@@ -30,6 +31,7 @@ contract DeployJudgesTest is Test {
     function test_AllContractsDeployed() public view {
         assertTrue(deployment.groth16Verifier != address(0));
         assertTrue(deployment.nullifierRegistry != address(0));
+        assertTrue(deployment.commitmentTree != address(0));
         assertTrue(deployment.p256Adapter != address(0));
         assertTrue(deployment.judgesVerifier != address(0));
         assertTrue(deployment.dao != address(0));
@@ -47,6 +49,18 @@ contract DeployJudgesTest is Test {
         JudgesVerifier verifier = JudgesVerifier(deployment.judgesVerifier);
         assertEq(address(verifier.zkVerifier()), deployment.groth16Verifier);
         assertEq(address(verifier.nullifierRegistry()), deployment.nullifierRegistry);
+    }
+
+    /// @dev Redesign B: the verifier must point at the CommitmentTree, and the tree must have a
+    ///      root poster set — otherwise no root could ever be published and every proof would
+    ///      revert with UnknownRoot.
+    function test_VerifierWiredToCommitmentTree() public view {
+        JudgesVerifier verifier = JudgesVerifier(deployment.judgesVerifier);
+        assertEq(address(verifier.commitmentTree()), deployment.commitmentTree);
+    }
+
+    function test_CommitmentTreeRootPosterConfigured() public view {
+        assertTrue(CommitmentTree(deployment.commitmentTree).rootPoster() != address(0));
     }
 
     /// @dev `setVerifier` is one-shot, so a second deployment run can't silently repoint an

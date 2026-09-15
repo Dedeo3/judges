@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {Script, console} from "forge-std/Script.sol";
 import {Groth16Verifier} from "../src/JudgesGroth16Verifier.sol";
 import {NullifierRegistry} from "../src/NullifierRegistry.sol";
+import {CommitmentTree} from "../src/CommitmentTree.sol";
 import {MonadP256Adapter} from "../src/MonadP256Adapter.sol";
 import {JudgesVerifier} from "../src/JudgesVerifier.sol";
 import {JudgesField} from "../src/libraries/JudgesField.sol";
@@ -37,6 +38,7 @@ contract DeployJudges is Script {
     struct Deployment {
         address groth16Verifier;
         address nullifierRegistry;
+        address commitmentTree;
         address p256Adapter;
         address judgesVerifier;
         address dao;
@@ -62,12 +64,18 @@ contract DeployJudges is Script {
         Groth16Verifier groth16Verifier = new Groth16Verifier();
         NullifierRegistry nullifierRegistry = new NullifierRegistry();
 
+        // Redesign B: the membership-root history. Its `rootPoster` (the server key that publishes
+        // roots) defaults to the deployer and can be rotated later; override with JUDGES_ROOT_POSTER.
+        CommitmentTree commitmentTree = new CommitmentTree();
+        commitmentTree.setRootPoster(vm.envOr("JUDGES_ROOT_POSTER", msg.sender));
+
         // Not called by JudgesVerifier (see its scope note), but deployed as a usable,
         // independently tested building block: onchain secp256r1 verification via Monad's native
         // P256VERIFY precompile is the protocol-level primitive this whole project is built on.
         MonadP256Adapter p256Adapter = new MonadP256Adapter();
 
-        JudgesVerifier judgesVerifier = new JudgesVerifier(address(groth16Verifier), address(nullifierRegistry));
+        JudgesVerifier judgesVerifier =
+            new JudgesVerifier(address(groth16Verifier), address(nullifierRegistry), address(commitmentTree));
         nullifierRegistry.setVerifier(address(judgesVerifier));
 
         SybilResistantDAO dao =
@@ -81,6 +89,7 @@ contract DeployJudges is Script {
         deployment = Deployment({
             groth16Verifier: address(groth16Verifier),
             nullifierRegistry: address(nullifierRegistry),
+            commitmentTree: address(commitmentTree),
             p256Adapter: address(p256Adapter),
             judgesVerifier: address(judgesVerifier),
             dao: address(dao),
@@ -92,6 +101,7 @@ contract DeployJudges is Script {
     function _logDeployment(Deployment memory d, uint256 claimAmount) internal pure {
         console.log("Groth16Verifier      ", d.groth16Verifier);
         console.log("NullifierRegistry    ", d.nullifierRegistry);
+        console.log("CommitmentTree       ", d.commitmentTree);
         console.log("MonadP256Adapter     ", d.p256Adapter);
         console.log("JudgesVerifier       ", d.judgesVerifier);
         console.log("SybilResistantDAO    ", d.dao);
@@ -113,6 +123,8 @@ contract DeployJudges is Script {
             vm.toString(d.agentRegistry),
             "\nNEXT_PUBLIC_JUDGES_FAUCET_ADDRESS=",
             vm.toString(d.faucet),
+            "\nNEXT_PUBLIC_JUDGES_COMMITMENT_TREE_ADDRESS=",
+            vm.toString(d.commitmentTree),
             "\n# Not consumed by the frontend, recorded for docs/architecture.md:\n",
             "# NullifierRegistry=",
             vm.toString(d.nullifierRegistry),
