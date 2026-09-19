@@ -816,12 +816,11 @@ Verification itself has no API endpoint — it happens on-chain, via
 - **Next.js route handlers** deployed as serverless functions on Vercel — not a standalone
   Fastify/Express process. Frontend and backend are one deployable unit, which is what makes the
   whole thing fit on free tiers with no server to keep alive.
-- **Neon** (serverless Postgres) via its HTTP driver, using the pooled connection string
-- **Upstash** (Redis over REST) for challenges — a connection-per-invocation TCP Redis client is
-  the wrong shape for serverless
+- **Neon** (serverless Postgres) via its HTTP driver, using the pooled connection string. It also
+  holds the short-lived challenges (see the data model below), so there is no separate cache service
 - `@simplewebauthn/server` for ceremony validation
 - `snarkjs` for proof generation, `viem` for EVM RPC
-- Docker Compose for local Postgres/Redis only
+- Docker Compose for local Postgres only
 
 One consequence of serverless worth stating: anything that waits on a Monad transaction
 confirmation happens client-side via the SDK, not inside a function, because functions have an
@@ -883,9 +882,13 @@ Two partial unique indexes on `(domain, credential_id)` and `(domain, wallet_add
 `where revoked_at is null`, make "one active binding per domain" a database invariant rather than
 an application-level check that a concurrent request could slip past.
 
-Verification sessions are **not** a Postgres table: they are short-TTL Redis keys, consumed with
-`GETDEL` so a challenge is single-use atomically. Storing them in Postgres would mean writing a
-row per ceremony and then needing to expire it.
+Short-lived, single-use state (WebAuthn challenges and pending wallet bindings) lives in an
+`ephemeral_state` table: a key, a JSON value and an expiry. A value is consumed with an atomic
+`delete ... where expires_at > now() returning value`, so it can be taken at most once and never
+after it expires. This started as Redis (Upstash) and moved to Postgres for the MVP: one fewer
+service to provision, at the cost of a write per ceremony and an opportunistic cleanup of expired
+rows on each insert. Postgres can be swapped back for a Redis `GETDEL` behind the same two-method
+store interface if ceremony volume ever makes that write cost matter.
 
 Do not store raw biometric information.
 
@@ -1047,7 +1050,7 @@ judges/
 │   ├── protocol.md
 │   └── security.md
 │
-├── docker/                        # local Postgres/Redis only
+├── docker/                        # local Postgres only
 ├── scripts/
 ├── IMPLEMENTATION.md              # phase-by-phase build log and open items
 └── package.json                   # pnpm workspace root
@@ -1074,7 +1077,7 @@ gitignored.
 | WebAuthn | `@simplewebauthn/server` + `/browser`, discoverable credentials | Standards-based; resident keys mean authentication needs no username lookup |
 | Backend | Next.js API routes (Vercel Functions) | Same deployable unit as the frontend — no server to keep alive, fits free tiers |
 | DB | Neon (serverless Postgres, HTTP driver) | Credential/app/binding records; pooled string for serverless |
-| Cache | Upstash (Redis over REST) | Challenge expiry + single-use via `GETDEL`; a TCP client is the wrong shape per-invocation |
+| Ephemeral state | Neon (`ephemeral_state` table) | Challenge expiry + single-use via atomic `delete ... returning`; no extra service to run |
 | ZK | Circom 2.2.3 + snarkjs (Groth16) | Practical hackathon path; `poseidon-lite` matches circomlib in TS |
 | Contract | Solidity 0.8.26 + Foundry | Monad EVM environment |
 | Chain | Monad Testnet (`10143`) | Fast live demo; chain definitions from viem |

@@ -94,6 +94,7 @@ Goal: working passkey registration + authentication, server-validated, no wallet
 **Acceptance test** (README §18 Phase 1): phone biometric/PIN → WebAuthn assertion → server returns valid, and a replayed assertion is rejected.
 
 **Verified so far**: full workspace `typecheck`/`build`/`lint` pass; `/demo` renders and calls the API; hitting an endpoint with no Upstash/Neon credentials configured fails loudly with a clear `Missing required env var` error instead of crashing the server — confirmed live via a local dev server.
+**2026-09-19 change — Redis removed**: challenges and pending bindings now live in Neon (`apps/web/migrations/0003_ephemeral_state.sql`, `src/lib/ephemeralState.ts`) instead of Upstash. Single-use is still atomic: `delete ... where key = $1 and expires_at > now() returning value`, so a second consume finds nothing and an expired entry is never returned. Checked against the real Neon database (store → take returns the value, second take returns null, expired take returns null). The entries above describing Upstash/`GETDEL` are kept as the original build log.
 **Not yet verified**: the actual WebAuthn ceremony end-to-end (needs a real platform authenticator — Touch ID / Windows Hello / a phone — which an automated browser can't provide) and the Neon/Upstash-backed persistence (needs real free-tier project credentials, not yet provisioned). Do this manually once those accounts exist, before checking this phase off as done.
 
 ---
@@ -283,7 +284,7 @@ Split by who can do it: everything automatable is built and tested here; the res
 
 - [ ] Deploy to Monad Testnet with a funded key; verify on the explorer.
 - [ ] Fund the faucet and create a DAO proposal so those demos have state to act on.
-- [ ] Provision Neon + Upstash; run `db:migrate`.
+- [ ] Provision Neon; run `db:migrate`. (Upstash is no longer needed — see the 2026-09-19 note under Phase 1.)
 - [ ] Import into Vercel (root `apps/web`), set the env vars, deploy — this is the live product link the submission requires.
 - [ ] Record the deployed addresses in `docs/architecture.md`.
 - [ ] Walk the end-to-end checklist in `docs/deployment.md` §4 on a real device — the WebAuthn ceremony needs a real platform authenticator, which no automated browser can provide.
@@ -335,7 +336,7 @@ Gate: **all** Definition of Done items (§12 below) pass on testnet, the demo vi
 - [ ] Deploy `JudgesVerifier`, `JudgesRegistry`, `NullifierRegistry` to Monad Mainnet via the same Foundry scripts used for testnet (parameterized by network, not duplicated).
 - [ ] Verify Mainnet contracts on the explorer.
 - [ ] Update SDK default network / docs to offer both `monad-testnet` and `monad-mainnet`, defaulting to whichever the product decides is canonical post-hackathon.
-- [ ] Post-launch monitoring: watch nullifier registry growth, gas costs of `P256VERIFY` calls under real load, and Redis-backed challenge expiry under real traffic.
+- [ ] Post-launch monitoring: watch nullifier registry growth, gas costs of `P256VERIFY` calls under real load, and the `ephemeral_state` table's challenge expiry/cleanup under real traffic.
 
 Do not skip straight here. Mainnet before testnet is fully validated repeats the exact risk this document exists to prevent.
 

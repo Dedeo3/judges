@@ -8,7 +8,7 @@
 // What this proves, and what it doesn't. It drives the real popup flow and the attacks against it:
 // consent rendering, cancel/close, a forged origin, the browser dropping mis-targeted messages, the
 // SDK ignoring a message from the wrong window, and the SDK rejecting a proof for another app's
-// namespace. It does NOT run a passkey ceremony or generate a real proof — that needs Upstash/Neon
+// namespace. It does NOT run a passkey ceremony or generate a real proof — that needs Neon
 // and a real authenticator — so the proof messages in cases 6-7 are injected from the popup window,
 // using the same message shape and postMessage call ConnectFlow uses.
 import { mkdtempSync, rmSync } from "node:fs";

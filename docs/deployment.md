@@ -1,8 +1,7 @@
 # Deployment Runbook (Phase 8)
 
 Everything here that can be automated is automated and tested. What's left needs credentials and
-accounts that only you can hold — a funded key, a Neon project, an Upstash project, a Vercel
-project. Those steps are marked **(you)**.
+accounts that only you can hold — a funded key, a Neon project, a Vercel project. Those steps are marked **(you)**.
 
 Order matters: the contracts can go up independently, but the web app needs both the contract
 addresses and the datastores before any flow works end to end.
@@ -85,12 +84,11 @@ Optional: `FAUCET_CLAIM_AMOUNT` (wei) overrides the 0.01 MON default.
 
 ## 2. Datastores **(you)**
 
-Both have free tiers that cover this workload.
+Neon's free tier covers this workload. It stores credentials and bindings, and also the short-lived
+single-use challenges, so there is no separate Redis to provision.
 
 1. **Neon** (Postgres) — create a project, take the **pooled** connection string.
-2. **Upstash** (Redis) — create a database, take `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN`.
-3. Apply the migrations:
+2. Apply the migrations:
    ```bash
    DATABASE_URL='<neon-pooled-url>' pnpm --filter @judges/web run db:migrate
    ```
@@ -106,7 +104,6 @@ Environment variables:
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | Neon pooled connection string |
-| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | from Upstash |
 | `JUDGES_DOMAIN_SECRET` | a fresh 32-byte random secret (`openssl rand -hex 32`) |
 | `RP_ID` | your deployed hostname, e.g. `judges.vercel.app` — **no scheme, no port** |
 | `RP_ORIGIN` | `https://<that hostname>` |

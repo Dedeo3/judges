@@ -182,5 +182,5 @@ typechecks there under TypeScript's strictest resolution (`NodeNext`, `strict`,
 cross-origin popup flow and its attack cases pass in a real Chrome engine.
 
 **Not yet verified**: a full `prove()` → `verify()` round trip on live infrastructure. That needs
-the backend deployed with Upstash/Neon, `JudgesVerifier` on Monad Testnet, and a real platform
+the backend deployed with Neon, `JudgesVerifier` on Monad Testnet, and a real platform
 authenticator — see `docs/deployment.md`.

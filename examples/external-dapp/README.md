@@ -21,7 +21,7 @@ Open http://localhost:4000, enter a wallet address, and press **Verify with Judg
 opens on :3000 — a different origin — runs the passkey ceremony there, and posts only the proof
 back.
 
-A full proof needs the Judges backend configured (Upstash + Neon, see `docs/deployment.md`) and a
+A full proof needs the Judges backend configured (Neon, see `docs/deployment.md`) and a
 passkey on a real device. Without them the flow still works up to the ceremony, which is enough to
 see the cross-origin handshake.
 
