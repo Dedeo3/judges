@@ -46,8 +46,9 @@ export default function AgentDemoPage() {
           }),
       }}
     >
-      <label>
-        Agent name <input value={name} onChange={(e) => setName(e.target.value)} />
+      <label className="field">
+        Agent name
+        <input value={name} onChange={(e) => setName(e.target.value)} />
       </label>
     </DemoShell>
   );

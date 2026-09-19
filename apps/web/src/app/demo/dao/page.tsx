@@ -47,11 +47,11 @@ export default function DaoDemoPage() {
           }),
       }}
     >
-      <label>
-        Proposal id{" "}
-        <input value={proposalId} onChange={(e) => setProposalId(e.target.value)} style={{ width: 60 }} />
+      <label className="field">
+        Proposal id
+        <input value={proposalId} onChange={(e) => setProposalId(e.target.value)} style={{ width: "6rem" }} />
       </label>
-      <label>
+      <label className="check">
         <input type="checkbox" checked={support} onChange={(e) => setSupport(e.target.checked)} /> Vote yes
       </label>
     </DemoShell>

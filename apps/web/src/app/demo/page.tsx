@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import { Judges, type JudgesProof } from "@judges/sdk";
+import { Marginalia } from "@/components/Document";
+import { SiteFrame } from "@/components/SiteFrame";
+import { Verdict } from "@/components/Verdict";
 // Imported for its `window.ethereum` global declaration, kept in one place.
 import "@/lib/wallet";
 
@@ -150,68 +153,84 @@ export default function DemoPage() {
   }
 
   return (
-    <main style={{ maxWidth: 480, margin: "4rem auto", fontFamily: "sans-serif" }}>
-      <h1>Judges — WebAuthn Demo</h1>
-      <p>Phase 1: register and verify a passkey. Phase 2: bind that passkey to a wallet.</p>
+    <SiteFrame>
+      <article className="sec" style={{ borderTop: 0 }}>
+        <div className="sec-side">
+          <span className="sec-num">Demos</span>
+          <Marginalia>Registration and verification run against this deployment&apos;s own backend and database.</Marginalia>
+        </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Display name (optional)"
-          disabled={busy}
-        />
-        <button onClick={handleRegister} disabled={busy}>
-          Register with passkey
-        </button>
-        <button onClick={handleAuthenticate} disabled={busy}>
-          Sign in with passkey
-        </button>
-      </div>
+        <div className="sec-body">
+          <h1 className="h1-demo">Passkey demo</h1>
+          <p>Register a passkey and verify it, then bind that passkey to a wallet.</p>
 
-      <hr style={{ margin: "32px 0" }} />
+          <div className="stack">
+            <label className="field">
+              Display name (optional)
+              <input value={label} onChange={(e) => setLabel(e.target.value)} disabled={busy} />
+            </label>
+            <button className="btn" onClick={handleRegister} disabled={busy}>
+              Register with passkey
+            </button>
+            <button className="btn" onClick={handleAuthenticate} disabled={busy}>
+              Sign in with passkey
+            </button>
+          </div>
 
-      <h2>Wallet binding</h2>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <button onClick={handleConnectWallet} disabled={busy}>
-          {wallet ? `Connected: ${wallet.slice(0, 6)}…${wallet.slice(-4)}` : "Connect wallet"}
-        </button>
-        <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="Domain" disabled={busy} />
-        <button onClick={handleBindWallet} disabled={busy || !wallet}>
-          Bind wallet to passkey
-        </button>
-      </div>
+          <h2>Wallet binding</h2>
+          <div className="stack">
+            <button className="btn" onClick={handleConnectWallet} disabled={busy}>
+              {wallet ? `Connected: ${wallet.slice(0, 6)}…${wallet.slice(-4)}` : "Connect wallet"}
+            </button>
+            <label className="field">
+              Domain
+              <input value={domain} onChange={(e) => setDomain(e.target.value)} disabled={busy} />
+            </label>
+            <button className="btn" onClick={handleBindWallet} disabled={busy || !wallet}>
+              Bind wallet to passkey
+            </button>
+          </div>
 
-      <hr style={{ margin: "32px 0" }} />
+          <h2>Prove membership</h2>
+          <p>
+            Uses <code>@judges/sdk</code> rather than a direct fetch, and proves through the WebAuthn ceremony above.
+            It needs a connected wallet: proofs are bound to one wallet, so they cannot be lifted and reused.
+          </p>
+          <div className="stack">
+            <button className="btn" onClick={handleProveMembership} disabled={busy || !wallet}>
+              Prove membership (ZK) via SDK
+            </button>
+          </div>
 
-      <h2>Phase 6: @judges/sdk</h2>
-      <p>
-        Uses the real published SDK package, not a direct fetch — proves via the WebAuthn ceremony above. Needs a
-        connected wallet: proofs are cryptographically bound to one wallet, so they can&apos;t be lifted and reused.
-      </p>
-      <button onClick={handleProveMembership} disabled={busy || !wallet}>
-        Prove membership (ZK) via SDK
-      </button>
+          <h2>Demo integrations</h2>
+          <p>Three apps, one SDK, three separate nullifier domains. Acting in one does not spend your turn in another.</p>
+          <ul className="prose-list">
+            <li>
+              <a href="/demo/dao">Sybil-resistant DAO</a>: one credential, one vote per proposal.
+            </li>
+            <li>
+              <a href="/demo/agent">AI agent registry</a>: agents registered only under a verified credential.
+            </li>
+            <li>
+              <a href="/demo/faucet">Sybil-resistant faucet</a>: one claim per credential.
+            </li>
+          </ul>
 
-      <hr style={{ margin: "32px 0" }} />
-
-      <h2>Phase 7: demo integrations</h2>
-      <p>Three apps, one SDK, three separate nullifier domains — acting in one doesn&apos;t spend your turn in another.</p>
-      <ul>
-        <li>
-          <a href="/demo/dao">Sybil-resistant DAO</a> — one credential, one vote per proposal
-        </li>
-        <li>
-          <a href="/demo/agent">AI agent registry</a> — agents registered only under a verified credential
-        </li>
-        <li>
-          <a href="/demo/faucet">Sybil-resistant faucet</a> — one claim per credential
-        </li>
-      </ul>
-
-      {status.kind !== "idle" && (
-        <p style={{ marginTop: 24, color: status.kind === "error" ? "crimson" : "green" }}>{status.message}</p>
-      )}
-    </main>
+          <div role="status" aria-live="polite">
+            {status.kind === "success" && (
+              <div className="stack">
+                <Verdict status="accepted" />
+                <p style={{ overflowWrap: "anywhere" }}>{status.message}</p>
+              </div>
+            )}
+            {status.kind === "error" && (
+              <p className="error" style={{ overflowWrap: "anywhere" }}>
+                {status.message}
+              </p>
+            )}
+          </div>
+        </div>
+      </article>
+    </SiteFrame>
   );
 }

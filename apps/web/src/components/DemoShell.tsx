@@ -5,6 +5,9 @@ import { Judges, type JudgesProof } from "@judges/sdk";
 import type { Address, WalletClient } from "viem";
 import { explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesConfig";
 import { connectWallet } from "@/lib/wallet";
+import { Marginalia } from "./Document";
+import { SiteFrame } from "./SiteFrame";
+import { Verdict } from "./Verdict";
 
 export type DemoStatus =
   | { kind: "idle" }
@@ -79,55 +82,78 @@ export function DemoShell({
     }
   }, [account, walletClient, action, appId]);
 
+  // A reused credential reverts with this custom error; show it as the verdict it is.
+  const nullifierRejected = status.kind === "error" && status.message.includes("NullifierAlreadyUsed");
+
   return (
-    <main style={{ maxWidth: 560, margin: "3rem auto", fontFamily: "sans-serif", lineHeight: 1.5 }}>
-      <p style={{ marginBottom: 8 }}>
-        <a href="/demo">← Judges demos</a>
-      </p>
-      <h1>{title}</h1>
-      <div style={{ color: "#444" }}>{intro}</div>
+    <SiteFrame>
+      <article className="sec" style={{ borderTop: 0 }}>
+        <div className="sec-side">
+          <span className="sec-num">
+            <a href="/demo">Demos</a>
+          </span>
+          <Marginalia>
+            Requires a registered passkey. Register one on the <a href="/demo">main demo page</a> first.
+          </Marginalia>
+        </div>
 
-      {notConfigured && (
-        <p style={{ marginTop: 24, padding: 12, background: "#fff4e5", border: "1px solid #f0c078" }}>
-          Not deployed yet: <code>{notConfigured}</code>. Run the deploy script (see{" "}
-          <code>docs/deployment.md</code>) and set the address, then this page works end to end.
-        </p>
-      )}
+        <div className="sec-body">
+          <h1 className="h1-demo">{title}</h1>
+          <div className="intro">{intro}</div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 24 }}>
-        <button onClick={handleConnect} disabled={busy}>
-          {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
-        </button>
-
-        {children}
-
-        <button onClick={handleRun} disabled={busy || !account || Boolean(notConfigured)}>
-          {busy ? "Working…" : action.label}
-        </button>
-      </div>
-
-      {status.kind !== "idle" && (
-        <p
-          style={{
-            marginTop: 24,
-            color: status.kind === "error" ? "crimson" : status.kind === "success" ? "green" : "#444",
-          }}
-        >
-          {status.message}
-          {status.kind === "success" && status.txHash && explorerTxUrl(status.txHash) && (
-            <>
-              {" "}
-              <a href={explorerTxUrl(status.txHash)!} target="_blank" rel="noreferrer">
-                View transaction
-              </a>
-            </>
+          {notConfigured && (
+            <div className="panel">
+              <div className="panel-head label">Not deployed yet</div>
+              <p className="panel-empty">
+                <code>{notConfigured}</code>. Run the deploy script (see <code>docs/deployment.md</code>) and set the
+                address, then this page works end to end.
+              </p>
+            </div>
           )}
-        </p>
-      )}
 
-      <p style={{ marginTop: 32, fontSize: 13, color: "#666" }}>
-        Requires a registered passkey — do that on the <a href="/demo">main demo page</a> first.
-      </p>
-    </main>
+          <div className="stack">
+            <button className="btn" onClick={handleConnect} disabled={busy}>
+              {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
+            </button>
+
+            {children}
+
+            <button className="btn" onClick={handleRun} disabled={busy || !account || Boolean(notConfigured)}>
+              {busy ? "Working…" : action.label}
+            </button>
+          </div>
+
+          <div role="status" aria-live="polite">
+            {status.kind === "busy" && <p className="muted">{status.message}</p>}
+
+            {status.kind === "success" && (
+              <div className="stack">
+                <Verdict status="accepted" />
+                <p>
+                  {status.message}
+                  {status.txHash && explorerTxUrl(status.txHash) && (
+                    <>
+                      {" "}
+                      <a href={explorerTxUrl(status.txHash)!} target="_blank" rel="noreferrer">
+                        View transaction
+                      </a>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {status.kind === "error" && (
+              <div className="stack">
+                {nullifierRejected && <Verdict status="rejected" reason="nullifier already used" />}
+                <p className="error" style={{ overflowWrap: "anywhere" }}>
+                  {status.message}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </article>
+    </SiteFrame>
   );
 }
