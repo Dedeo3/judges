@@ -10,7 +10,7 @@ import {
 } from "@judges/crypto";
 import { verifyAuthentication, type AuthenticationResponseJSON } from "@judges/webauthn";
 import { rpConfig, requireEnv } from "./env";
-import { redisChallengeStore } from "./challengeStore";
+import { challengeStore } from "./challengeStore";
 import { neonCredentialStore } from "./credentialStore";
 
 // Committed, frozen artifacts (see .gitignore's prover/build exceptions and prover/README.md) —
@@ -61,7 +61,7 @@ export async function proveMembership(params: {
     rp: rpConfig,
     sessionId: params.sessionId,
     response: params.response,
-    challengeStore: redisChallengeStore,
+    challengeStore: challengeStore,
     credentialStore: neonCredentialStore,
   });
 

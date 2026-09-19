@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createRegistrationOptions } from "@judges/webauthn";
 import { rpConfig } from "@/lib/env";
-import { redisChallengeStore } from "@/lib/challengeStore";
+import { challengeStore } from "@/lib/challengeStore";
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     sessionId,
     userId,
     label,
-    challengeStore: redisChallengeStore,
+    challengeStore: challengeStore,
   });
 
   return NextResponse.json({ sessionId, options });

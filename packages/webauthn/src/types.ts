@@ -11,7 +11,7 @@ export interface PendingChallenge {
   label?: string;
 }
 
-/** One-time-use challenge storage (Redis-backed in production). */
+/** One-time-use challenge storage (Postgres-backed in production). */
 export interface ChallengeStore {
   set(sessionId: string, value: PendingChallenge, ttlSeconds: number): Promise<void>;
   /** Fetch and delete atomically — enforces single-use, so replay after consumption fails. */

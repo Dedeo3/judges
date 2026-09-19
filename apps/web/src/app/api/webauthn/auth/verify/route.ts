@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyAuthentication } from "@judges/webauthn";
 import { rpConfig } from "@/lib/env";
-import { redisChallengeStore } from "@/lib/challengeStore";
+import { challengeStore } from "@/lib/challengeStore";
 import { neonCredentialStore } from "@/lib/credentialStore";
 
 export async function POST(request: Request) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     rp: rpConfig,
     sessionId: body.sessionId,
     response: body.response,
-    challengeStore: redisChallengeStore,
+    challengeStore: challengeStore,
     credentialStore: neonCredentialStore,
   });
 
