@@ -164,7 +164,7 @@ try {
           proof: {
             verified: true,
             proof: `0x${"11".repeat(256)}`,
-            walletCommitment: `0x${"22".repeat(32)}`,
+            merkleRoot: `0x${"22".repeat(32)}`,
             nullifier: `0x${"33".repeat(32)}`,
             domain: `0x${"44".repeat(32)}`,
             contextHash: `0x${"55".repeat(32)}`,
@@ -192,7 +192,7 @@ try {
           proof: {
             verified: true,
             proof: `0x${"11".repeat(256)}`,
-            walletCommitment: `0x${"22".repeat(32)}`,
+            merkleRoot: `0x${"22".repeat(32)}`,
             nullifier: `0x${"33".repeat(32)}`,
             domain: `0x${"44".repeat(32)}`,
             contextHash: `0x${"55".repeat(32)}`,
@@ -226,7 +226,7 @@ try {
           proof: {
             verified: true,
             proof: `0x${"11".repeat(256)}`,
-            walletCommitment: `0x${"22".repeat(32)}`,
+            merkleRoot: `0x${"22".repeat(32)}`,
             nullifier: `0x${"33".repeat(32)}`,
             domain: `0x${"44".repeat(32)}`,
             contextHash: `0x${"55".repeat(32)}`,

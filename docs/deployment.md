@@ -17,21 +17,32 @@ addresses and the datastores before any flow works end to end.
 - `MONAD_TESTNET_RPC_URL` in your environment (defaults to the public
   `https://testnet-rpc.monad.xyz`).
 
-### 1.2 Confirm the trusted setup you're deploying against
+### 1.2 Build the Redesign B circuit, trusted setup, and verifier
 
-`contracts/src/JudgesGroth16Verifier.sol` has a verification key baked in from
-`prover/build/judges_membership_final.zkey`. Both are committed and must stay a matched pair. If
-you re-ran `prover`'s trusted setup at any point, re-export the verifier and the test fixture
-before deploying, or every proof will fail on-chain:
+`contracts/src/JudgesGroth16Verifier.sol` still holds the **pre-B** verifying key. Redesign B uses
+a new circuit (`judges_membership_v2.circom`), so you must build it, run its own trusted setup, and
+re-export the verifier + fixture before deploying — otherwise every proof fails on-chain. Needs
+`circom` 2.x installed.
 
 ```bash
-cd prover && pnpm run build && pnpm run setup
-pnpm exec tsx scripts/export_verifier_fixture.ts
-npx snarkjs zkey export solidityverifier build/judges_membership_final.zkey ../contracts/src/JudgesGroth16Verifier.sol
+cd prover
+pnpm run build       # compiles judges_membership_v2.circom -> build/
+pnpm run setup       # single-contributor trusted setup (ptau 2^14) -> judges_membership_v2_final.zkey
+npx snarkjs zkey export solidityverifier build/judges_membership_v2_final.zkey ../contracts/src/JudgesGroth16Verifier.sol
+pnpm exec tsx scripts/export_verifier_fixture_v2.ts   # regenerates contracts/test/JudgesVerifier.t.sol
+
+# Serve the artifacts to the browser prover (committed; Vercel serves public/ from git):
+mkdir -p ../apps/web/public/prover/judges_membership_v2_js
+cp build/judges_membership_v2_js/judges_membership_v2.wasm ../apps/web/public/prover/judges_membership_v2_js/
+cp build/judges_membership_v2_final.zkey ../apps/web/public/prover/
+git add ../apps/web/public/prover ../contracts/src/JudgesGroth16Verifier.sol ../contracts/test/JudgesVerifier.t.sol
 ```
 
+Then `cd ../contracts && SKIP_FORK_TESTS=1 forge test` must pass.
+
 Reminder: that setup is **single-contributor and MVP-only** — see `prover/README.md` before
-treating a deployment as production.
+treating a deployment as production. The `.zkey` and the on-chain verifying key are a matched pair;
+re-running the setup means redoing all of the above.
 
 ### 1.3 Dry run (no key needed)
 
@@ -54,20 +65,23 @@ forge script script/DeployJudges.s.sol:DeployJudges \
   --keystore <path-to-your-keystore>   # or --ledger, or --private-key
 ```
 
-The script deploys in dependency order and calls `nullifierRegistry.setVerifier(...)` itself:
+The script deploys in dependency order and wires everything itself:
 
 ```
-Groth16Verifier → NullifierRegistry → MonadP256Adapter → JudgesVerifier
+Groth16Verifier → NullifierRegistry → CommitmentTree (setRootPoster) → MonadP256Adapter
+  → JudgesVerifier(zk, nullifierRegistry, commitmentTree)
   → nullifierRegistry.setVerifier(judgesVerifier)
   → SybilResistantDAO / AgentRegistry / SybilResistantFaucet
 ```
 
 `setVerifier` is deployer-only and callable exactly once, so the address that runs this script is
-the only one that could ever have set it — and the script spends it immediately. There is nothing
-left to configure afterwards, and a second deploy produces a fresh, independent registry rather
-than repointing the old one.
+the only one that could ever have set it — and the script spends it immediately. `CommitmentTree`'s
+`rootPoster` is set to `JUDGES_ROOT_POSTER` (defaults to the deployer) and is rotatable by the
+deployer later. A second deploy produces a fresh, independent stack rather than repointing the old
+one.
 
-Optional: `FAUCET_CLAIM_AMOUNT` (wei) overrides the 0.01 MON default.
+Optional env: `FAUCET_CLAIM_AMOUNT` (wei) overrides the 0.01 MON default; `JUDGES_ROOT_POSTER`
+(address) sets who may publish Merkle roots (default: the deployer).
 
 ### 1.5 After deploying
 
@@ -78,7 +92,16 @@ Optional: `FAUCET_CLAIM_AMOUNT` (wei) overrides the 0.01 MON default.
   ```bash
   cast send <dao-address> "createProposal(string)" "Fund the thing" --rpc-url monad_testnet --keystore <...>
   ```
-- Record every address in `docs/architecture.md`.
+- **Publish the first Merkle root (Redesign B).** A proof only verifies against a root the
+  `CommitmentTree` has posted, so after at least one identity is registered (via `/demo`), read the
+  current root and post it:
+  ```bash
+  # rootHex from the deployment's own /api/commitments/root, or from the app after a registration
+  cast send <commitmentTree-address> "postRoot(bytes32)" <rootHex> --rpc-url monad_testnet --keystore <...>
+  ```
+  Re-post whenever new identities are registered (each changes the root). The `rootPoster` key is
+  the only one allowed to call this.
+- Record every address (including `CommitmentTree`) in `docs/architecture.md`.
 
 ---
 
@@ -125,10 +148,13 @@ configuration is needed for them: `RP_ID`/`RP_ORIGIN` stay Judges' own hostname,
 URL is a different origin with a different `RP_ID`, so passkeys registered on one won't work on
 the other.
 
-The wasm + proving key that `/api/prove` reads are pulled into the function bundle by
-`outputFileTracingRoot`/`outputFileTracingIncludes` in `apps/web/next.config.ts`. Verified by
-building with the gitignored prover artifacts moved aside: the two committed files are traced, and
-nothing required is missing from a fresh clone.
+`NEXT_PUBLIC_JUDGES_*_ADDRESS` now includes `NEXT_PUBLIC_JUDGES_COMMITMENT_TREE_ADDRESS`
+(from `contracts/deployments/<chainId>.env`).
+
+Redesign B proves in the **browser**, so there is no `/api/prove` server route reading the wasm/zkey
+anymore. The v2 `judges_membership_v2.wasm` + `judges_membership_v2_final.zkey` are served as static
+assets from `apps/web/public/prover/` (committed — see §1.2 and `public/prover/README.md`), which
+Vercel serves straight from git. If they are missing, browser proving fails with a fetch error.
 
 ---
 
@@ -137,16 +163,19 @@ nothing required is missing from a fresh clone.
 In a browser on the deployed URL, with a real platform authenticator (Touch ID / Windows Hello /
 a phone) — none of this can be exercised by an automated browser:
 
-1. `/demo` → Register with passkey → Sign in with passkey.
-2. `/demo` → Connect wallet → Bind wallet to passkey.
-3. `/demo` → Prove membership (ZK) via SDK.
-4. `/demo/faucet` → claim. Then claim again: expect a revert naming `NullifierAlreadyUsed`.
-5. `/demo/dao` → vote. Then vote again: same revert. Note the tally only moved once.
-6. `/demo/agent` → register an agent. Confirm `agents(1).owner` is your wallet.
+1. `/demo` → Register with passkey.
+2. `/demo` → Connect wallet → Sign identity message and register (passkey-gated).
+3. **Post the new root** (§1.5) — the just-registered identity's root must be on-chain first.
+4. `/demo` → Generate a proof (ZK, in-browser) to confirm proving works.
+5. `/demo/faucet` → claim. Then claim again: expect a revert naming `NullifierAlreadyUsed`.
+6. `/demo/dao` → vote. Then vote again: same revert. Note the tally only moved once.
+7. `/demo/agent` → register an agent. Confirm `agents(1).owner` is your wallet.
 
-Step 4 or 5 failing with `InvalidProof` rather than a nullifier error usually means one of:
-the deployed `JudgesGroth16Verifier` doesn't match the `zkey` the server is proving with (§1.2),
-or `appId` in the frontend doesn't match the app-id string the contract was deployed with.
+Troubleshooting a revert instead of a nullifier error:
+- `UnknownRoot` → the current membership root hasn't been posted on-chain (step 3), or a new
+  identity registered after the last `postRoot`.
+- `InvalidProof` → the deployed `JudgesGroth16Verifier` doesn't match the v2 `zkey` (§1.2), or the
+  frontend `appId` doesn't match the app-id string the contract was deployed with.
 
 ---
 

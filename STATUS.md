@@ -11,11 +11,15 @@ See `Judges_README.md` for the product and `IMPLEMENTATION.md` for the phase-by-
 
 ## 1. Where we are, in one paragraph
 
-All code is written and tested locally, **the contracts are live on Monad Testnet**, Neon Postgres
-is provisioned and migrated, and **the frontend is built** (landing page, developers page, restyled
-demos, committed in three commits). What is **not** done: the web app is not deployed (no live URL
-yet), nothing has been tested with a real passkey on a real device (a local run is the next step),
-and none of the non-code submission assets exist (videos, logo, traction, market doc).
+All code is written and tested locally, **the contracts are live on Monad Testnet** (pre-B — see
+below), Neon Postgres is provisioned and migrated, and **the frontend is built** (landing page,
+developers page, restyled demos). **Redesign B is implemented on branch `redesign-b`** (12 commits):
+it fixes a critical on-chain proof-forgery flaw found in audit (the pre-B verifier accepted a proof
+over any invented secret) plus the §27.8 server-secret privacy issue, by moving the secret
+client-side and gating on-chain membership. In-repo verification passes (crypto 30 + sdk 52 tests,
+all typecheck, `next build`); it still needs the circom/Foundry pipeline + redeploy (see §3-C).
+What is **not** done: web app not deployed (no live URL yet), nothing tested with a real passkey on
+a real device, B not built/redeployed, and none of the non-code submission assets exist.
 
 ---
 
@@ -119,16 +123,25 @@ Ordered by what blocks what. Target dates come from the handover doc (`sisa gawe
 - [ ] Check the `@judges` npm scope is free (rename and update `docs/integration.md` if not).
 - [ ] Publish `0.x` and confirm the `docs/integration.md` example works from the published package.
 
-### C. Redesign B — take the backend out of the trust path (target 26 Sep, 6-day timebox)
-Today the credential secret is derived on the server from `JUDGES_DOMAIN_SECRET`, so the backend can
-compute anyone's nullifier and link their activity. Design B moves the secret client-side and proves
-Merkle membership in-browser. Full spec is in `sisa gawean.txt`, Task 2.
-- [ ] If it slips past the timebox: **stop, submit the current version**, keep the disclosure in
-  `Judges_README.md` §27 item 8.
-- [ ] If done: new circuit, new trusted setup, re-export verifier and fixtures, redeploy contracts and
-  web, re-run all tests and the popup E2E.
-- [ ] Measure and report on real phones (Android mid-range + iPhone): proving time, root-posting gas,
-  whether the deterministic wallet signature works across the wallets we support.
+### C. Redesign B — take the backend out of the trust path — **implemented on branch `redesign-b`**
+The secret is now derived client-side from a wallet signature (never sent to the server); the new
+circuit proves LeanIMT membership under a server-published root; `JudgesVerifier` rejects unknown
+roots (`CommitmentTree`); proving runs in the browser; registration is passkey-gated. This also
+closes the audit's critical forgery finding. Full write-up: `docs/security.md` + `IMPLEMENTATION.md`
+(Redesign B section).
+
+Done (in-repo, verified): crypto/circuit/contracts/server/SDK/web all landed; crypto 30 + sdk 52
+tests, all typecheck, `apps/web` `next build` pass.
+
+Remaining (needs the toolchain / a device, then merge):
+- [ ] Build v2 circuit + run the new trusted setup (`circom`), re-export `JudgesGroth16Verifier.sol`
+  + `contracts/test/JudgesVerifier.t.sol`, `forge test`.
+- [ ] Copy + commit the v2 `wasm`/`zkey` to `apps/web/public/prover/` (Vercel serves them).
+- [ ] Redeploy contracts (addresses change), set `rootPoster`, post the first root.
+- [ ] Device test: passkey register + wallet signature + prove end-to-end.
+- [ ] Measure on real phones (Android mid-range + iPhone): proving time, root-posting gas, whether
+  the deterministic wallet signature holds across supported wallets.
+- [ ] Merge `redesign-b` to `main`.
 
 ### D. Traction — at least one other team integrates (live by 4 Oct)
 - [ ] List 10–15 candidate teams/projects, pitch them, offer a pairing call.
@@ -163,7 +176,9 @@ Merkle membership in-browser. Full spec is in `sisa gawean.txt`, Task 2.
 - Judges proves "a user-verified passkey holder is present", **not** "one unique human". Registration
   uses `attestationType: "none"` with no rate limit, so one person can hold many passkeys.
 - The trusted setup is single-contributor and local. Fine for a demo, not production-safe.
-- The credential secret is server-derived (see Design B above).
+- The credential secret is server-derived on `main`; **fixed on branch `redesign-b`** (client-side
+  secret + on-chain membership), not yet merged/redeployed. Pre-B contracts are also forgeable (the
+  audit finding in §1) until B is deployed.
 - A nullifier can be griefed (burned early by an observer) but not stolen.
 - Groth16 verification costs about 1.13M gas per action on Monad.
 - Nothing has been exercised with a real authenticator yet.
