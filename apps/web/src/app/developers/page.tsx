@@ -56,7 +56,7 @@ const BINDING = `const contextHash = await publicClient.readContract({
 
 const proof = await judges.prove({ assurance: "user_verified", wallet: account, contextHash });
 
-await daoContract.write.vote([proposalId, support, proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet]);`;
+await daoContract.write.vote([proposalId, support, proof.proof, proof.merkleRoot, proof.nullifier, proof.wallet]);`;
 
 const NULLIFIER_CHECK = `const used = await judges.isNullifierUsed({
   domain: proof.domain,
