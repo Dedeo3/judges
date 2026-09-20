@@ -1,10 +1,11 @@
 /**
  * Browser-safe entry point for `@judges/crypto`.
  *
- * Redesign B generates proofs in the browser, so the client must import only modules free of
- * `node:crypto`. This entry deliberately EXCLUDES the pre-B server-side pieces (`commitment.ts`'s
- * HMAC `deriveCredentialSecret`, and `membership.ts` which builds on it). Everything here runs in
- * both the browser and Node. Import it as `@judges/crypto/client`.
+ * Redesign B generates proofs in the browser. Since the pre-B server-side modules (commitment.ts's
+ * HMAC path, membership.ts) were removed, the whole package is now free of `node:crypto` and this
+ * entry is identical to the package index — kept as a stable, explicit `@judges/crypto/client`
+ * import for the browser-proving code, and as a guard against a future node-only module sneaking
+ * back into the default export.
  */
 export * from "./field";
 export * from "./nullifier";

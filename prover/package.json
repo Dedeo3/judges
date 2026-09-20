@@ -3,12 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "bash scripts/build_circuit.sh",
-    "setup": "bash scripts/trusted_setup.sh",
-    "test": "tsx scripts/test_acceptance.ts",
-    "build:v2": "bash scripts/build_circuit_v2.sh",
-    "setup:v2": "bash scripts/trusted_setup_v2.sh",
-    "test:v2": "tsx scripts/test_acceptance_v2.ts",
+    "build": "bash scripts/build_circuit_v2.sh",
+    "setup": "bash scripts/trusted_setup_v2.sh",
+    "test": "tsx scripts/test_acceptance_v2.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

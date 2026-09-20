@@ -5,7 +5,7 @@ const HEX_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 /** abi.encode(uint256[2], uint256[2][2], uint256[2]) is 8 words = 256 bytes = 512 hex chars. */
 const HEX_PROOF = /^0x[0-9a-fA-F]{512}$/;
 
-/** The /api/prove response body. Also what the /connect popup posts back, plus the app id used. */
+/** The proof payload the browser prover produces and the /connect popup posts back, plus the app id used. */
 export interface ProveApiResponse {
   verified: boolean;
   reason?: string;

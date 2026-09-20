@@ -1,4 +1,5 @@
 import * as snarkjs from "snarkjs";
+import { startAuthentication } from "@simplewebauthn/browser";
 import { encodeAbiParameters } from "viem";
 import {
   assuranceContextHash,
@@ -20,8 +21,9 @@ import type { AssuranceLevel, ProveApiResponse } from "@judges/sdk";
  * browser — the server only ever sees the commitment and the finished proof. This replaces the
  * pre-B `/api/prove` server path, whose server-held secret was README §27.8's disclosed weakness.
  *
- * Steps: sign the fixed identity message -> secret -> commitment -> register it (idempotent) ->
- * fetch the LeanIMT inclusion proof -> build the witness -> Groth16 prove with the v2 wasm/zkey.
+ * Steps: sign the fixed identity message -> secret -> commitment -> fetch the LeanIMT inclusion
+ * proof -> build the witness -> Groth16 prove with the v2 wasm/zkey. Registration is a separate,
+ * passkey-gated step (`registerIdentity`); proving requires the identity to already be a member.
  *
  * The wasm + zkey are served as static assets under `public/prover/` (copied from
  * prover/build after `pnpm --filter @judges/prover build:v2 && setup:v2`). The proof only verifies
@@ -65,21 +67,16 @@ export async function proveMembershipInBrowser(params: BrowserProveParams): Prom
   const secret = deriveIdentitySecret(signature);
   const commitment = deriveIdentityCommitment(secret);
 
-  // 2. Register the commitment (idempotent) so it is a leaf in the server's tree.
-  const registerRes = await fetch(`${apiBaseUrl}/api/commitments/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ commitment: commitment.toString() }),
-  });
-  if (!registerRes.ok) {
-    return { verified: false, reason: "commitment_registration_failed" };
-  }
-
-  // 3. Fetch the inclusion proof for that commitment.
+  // 2. Fetch the inclusion proof. Proving never registers — the commitment must already be a
+  //    member (registered via the passkey-gated `registerIdentity` flow). A missing leaf means
+  //    the user hasn't registered their identity yet.
   const proofRes = await fetch(
     `${apiBaseUrl}/api/commitments/proof?commitment=${encodeURIComponent(commitment.toString())}`,
   );
   const proofBody = (await proofRes.json().catch(() => null)) as InclusionProofResponse | null;
+  if (proofRes.status === 404) {
+    return { verified: false, reason: "identity_not_registered" };
+  }
   if (!proofRes.ok || !proofBody?.ok || !proofBody.proof) {
     return { verified: false, reason: proofBody?.reason ?? "inclusion_proof_unavailable" };
   }
@@ -88,7 +85,7 @@ export async function proveMembershipInBrowser(params: BrowserProveParams): Prom
     return { verified: false, reason: "inclusion_proof_malformed" };
   }
 
-  // 4. Build the witness. The circuit binds policyHash = sha256(contextHash ‖ wallet) % p.
+  // 3. Build the witness. The circuit binds policyHash = sha256(contextHash ‖ wallet) % p.
   const contextHash = params.contextHash ?? toHex32(assuranceContextHash(params.assurance));
   const policyHash = derivePolicyHashFromHex({ contextHash, wallet: params.wallet });
 
@@ -102,7 +99,7 @@ export async function proveMembershipInBrowser(params: BrowserProveParams): Prom
   const witness = deriveMembershipV2Witness({ secret, applicationId: params.appId, merkleProof, policyHash });
   const input = membershipV2WitnessToInputJson(witness);
 
-  // 5. Groth16 prove in the browser against the served v2 artifacts.
+  // 4. Groth16 prove in the browser against the served v2 artifacts.
   const { proof, publicSignals } = await snarkjs.groth16.fullProve(
     input,
     params.wasmUrl ?? DEFAULT_WASM_URL,
@@ -131,4 +128,54 @@ export async function proveMembershipInBrowser(params: BrowserProveParams): Prom
     wallet: params.wallet,
     appId: params.appId,
   };
+}
+
+export interface RegisterIdentityParams {
+  wallet: `0x${string}`;
+  signIdentityMessage: (message: string) => Promise<`0x${string}`>;
+  apiBaseUrl?: string;
+}
+
+export interface RegisterIdentityResult {
+  ok: boolean;
+  reason?: string;
+  root?: string;
+  rootHex?: `0x${string}`;
+  leafIndex?: number;
+}
+
+/**
+ * Registers the caller's identity commitment, gated by a passkey (humanity).
+ *
+ * Requires a passkey already registered on this deployment. Runs a WebAuthn assertion (the
+ * humanity gate), derives the commitment from a wallet signature, and posts both to
+ * /api/commitments/register, which verifies the assertion before storing the commitment. The
+ * secret never leaves the browser. The returned root must then be published on-chain
+ * (CommitmentTree.postRoot) before proofs against it verify.
+ */
+export async function registerIdentity(params: RegisterIdentityParams): Promise<RegisterIdentityResult> {
+  const apiBaseUrl = params.apiBaseUrl ?? "";
+
+  const signature = await params.signIdentityMessage(JUDGES_IDENTITY_MESSAGE);
+  const commitment = deriveIdentityCommitment(deriveIdentitySecret(signature));
+
+  // Passkey assertion — proof a user-verified passkey holder is present.
+  const optionsRes = await fetch(`${apiBaseUrl}/api/webauthn/auth/options`, { method: "POST" });
+  if (!optionsRes.ok) return { ok: false, reason: "auth_options_failed" };
+  const { sessionId, options } = (await optionsRes.json()) as {
+    sessionId: string;
+    options: Parameters<typeof startAuthentication>[0]["optionsJSON"];
+  };
+  const assertion = await startAuthentication({ optionsJSON: options });
+
+  const res = await fetch(`${apiBaseUrl}/api/commitments/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, response: assertion, commitment: commitment.toString() }),
+  });
+  const body = (await res.json().catch(() => null)) as RegisterIdentityResult | null;
+  if (!res.ok || !body?.ok) {
+    return { ok: false, reason: body?.reason ?? "registration_failed" };
+  }
+  return { ok: true, root: body.root, rootHex: body.rootHex, leafIndex: body.leafIndex };
 }
