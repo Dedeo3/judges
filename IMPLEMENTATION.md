@@ -406,3 +406,40 @@ Copied from README §28 — this is the actual finish line for Phase 8:
 8. Testnet deployment + demo     (Phase 8)  <- hackathon submission
 9. Mainnet promotion             (Phase 9)  <- only after 8 is fully proven
 ```
+
+---
+
+## Redesign B — take the backend out of the trust path (branch `redesign-b`)
+
+Redesign B (handover Task 2) addresses two issues: the disclosed §27.8 weakness (server-derived
+secret) **and** a critical flaw found in audit — the pre-B on-chain verifier accepted a Groth16
+proof over *any* invented secret, because nothing checked the commitment against a registered set
+(a forged proof was shown to verify against the committed key). See `docs/security.md`.
+
+**What changed**
+
+- **Identity secret is client-side.** Derived from a deterministic wallet signature over a fixed
+  message (`packages/crypto/src/identity.ts`), never sent to the server. The server stores only
+  `identityCommitment = Poseidon(secret)`.
+- **Membership, not bare knowledge.** New circuit `prover/circuits/judges_membership_v2.circom`
+  proves LeanIMT inclusion of the commitment under a public `merkleRoot`, plus the nullifier and
+  the wallet/action `policyHash`. TS mirror: `packages/crypto` (`tree.ts`, `membershipV2.ts`),
+  pinned by its tests.
+- **On-chain root gate.** `contracts/src/CommitmentTree.sol` keeps an append-only root history
+  (only the server's `rootPoster` posts). `JudgesVerifier.verify` reverts `UnknownRoot` unless the
+  proof's root was published; the `walletCommitment` arg is now `merkleRoot`.
+- **Browser proving.** `apps/web/src/lib/proveBrowser.ts` runs `snarkjs.groth16.fullProve` in the
+  browser against the served v2 wasm/zkey. Registration is passkey-gated
+  (`/api/commitments/register` requires a WebAuthn assertion). The pre-B `/api/prove`, `lib/prove.ts`,
+  and the wallet-binding subsystem (`/api/bindings/*`) were removed.
+- **SDK API unchanged** except `JudgesProof.walletCommitment → merkleRoot`.
+
+**Verified in-repo** (2026-09-20): `@judges/crypto` 30 tests, `@judges/sdk` 52 tests, all packages
+typecheck, `apps/web` `next build` passes. **Not yet done by the team**: build the v2 circuit +
+run the new trusted setup (needs `circom`), re-export `JudgesGroth16Verifier.sol` + the fixture,
+copy the v2 wasm/zkey to `apps/web/public/prover/`, redeploy the contracts, post the first root,
+and run the device/passkey end-to-end test.
+
+**Residual limitations (README §27):** the server is still the gatekeeper (can censor/add leaves);
+B does not add sybil resistance; the client-derived secret assumes deterministic wallet signatures;
+and B introduces its own single-contributor trusted setup.
