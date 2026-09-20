@@ -10,7 +10,7 @@ export interface ProveApiResponse {
   verified: boolean;
   reason?: string;
   proof?: string;
-  walletCommitment?: string;
+  merkleRoot?: string;
   nullifier?: string;
   domain?: string;
   contextHash?: string;
@@ -42,8 +42,8 @@ export function toJudgesProof(
   const malformed =
     !result.proof ||
     !HEX_PROOF.test(result.proof) ||
-    !result.walletCommitment ||
-    !HEX_BYTES32.test(result.walletCommitment) ||
+    !result.merkleRoot ||
+    !HEX_BYTES32.test(result.merkleRoot) ||
     !result.nullifier ||
     !HEX_BYTES32.test(result.nullifier) ||
     !result.domain ||
@@ -60,7 +60,7 @@ export function toJudgesProof(
 
   return {
     proof: result.proof as `0x${string}`,
-    walletCommitment: result.walletCommitment as `0x${string}`,
+    merkleRoot: result.merkleRoot as `0x${string}`,
     nullifier: result.nullifier as `0x${string}`,
     domain: result.domain as `0x${string}`,
     contextHash: result.contextHash as `0x${string}`,

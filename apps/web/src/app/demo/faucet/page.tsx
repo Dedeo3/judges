@@ -36,7 +36,7 @@ export default function FaucetDemoPage() {
             address: addresses.faucet!,
             abi: faucetAbi,
             functionName: "claim",
-            args: [proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet],
+            args: [proof.proof, proof.merkleRoot, proof.nullifier, proof.wallet],
             account,
             chain: walletClient.chain,
           }),

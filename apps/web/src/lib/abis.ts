@@ -155,7 +155,7 @@ export const daoAbi = [
         "internalType": "bytes"
       },
       {
-        "name": "walletCommitment",
+        "name": "merkleRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -343,7 +343,7 @@ export const agentRegistryAbi = [
         "internalType": "bytes"
       },
       {
-        "name": "walletCommitment",
+        "name": "merkleRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -435,7 +435,7 @@ export const faucetAbi = [
         "internalType": "bytes"
       },
       {
-        "name": "walletCommitment",
+        "name": "merkleRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       },
@@ -643,7 +643,7 @@ export const judgesVerifierAbi = [
         "internalType": "bytes"
       },
       {
-        "name": "walletCommitment",
+        "name": "merkleRoot",
         "type": "bytes32",
         "internalType": "bytes32"
       },

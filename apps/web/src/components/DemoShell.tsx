@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useState, type ReactNode } from "react";
-import { Judges, type JudgesProof } from "@judges/sdk";
+import { toJudgesProof, type JudgesProof } from "@judges/sdk";
 import type { Address, WalletClient } from "viem";
 import { explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesConfig";
+import { proveMembershipInBrowser } from "@/lib/proveBrowser";
 import { connectWallet } from "@/lib/wallet";
 import { Marginalia } from "./Document";
 import { SiteFrame } from "./SiteFrame";
@@ -69,9 +70,15 @@ export function DemoShell({
       setStatus({ kind: "busy", message: "Reading action binding from the contract…" });
       const contextHash = await action.contextHash(account);
 
-      setStatus({ kind: "busy", message: "Passkey ceremony, then generating the ZK proof…" });
-      const judges = new Judges({ network: "monad-testnet", appId });
-      const proof = await judges.prove({ assurance: "user_verified", wallet: account, contextHash });
+      setStatus({ kind: "busy", message: "Sign the identity message, then proving in your browser…" });
+      const raw = await proveMembershipInBrowser({
+        appId,
+        wallet: account,
+        assurance: "user_verified",
+        contextHash,
+        signIdentityMessage: (message) => walletClient.signMessage({ account, message }),
+      });
+      const proof = toJudgesProof(raw, "user_verified", appId);
 
       setStatus({ kind: "busy", message: "Submitting to Monad…" });
       const txHash = await action.submit({ proof, account, walletClient });
@@ -93,7 +100,8 @@ export function DemoShell({
             <a href="/demo">Demos</a>
           </span>
           <Marginalia>
-            Requires a registered passkey. Register one on the <a href="/demo">main demo page</a> first.
+            You sign a fixed message with your wallet to derive a private identity; the proof is
+            generated in your browser. Nothing about the secret leaves this device.
           </Marginalia>
         </div>
 

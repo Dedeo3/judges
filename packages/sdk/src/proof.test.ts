@@ -8,7 +8,7 @@ function validResponse() {
   return {
     verified: true,
     proof: `0x${"11".repeat(256)}`,
-    walletCommitment: B32("22"),
+    merkleRoot: B32("22"),
     nullifier: B32("33"),
     domain: B32("44"),
     contextHash: B32("55"),
@@ -44,7 +44,7 @@ describe("toJudgesProof", () => {
   it.each([
     ["proof", "0x1234"],
     ["proof", `0x${"11".repeat(255)}`],
-    ["walletCommitment", "0x22"],
+    ["merkleRoot", "0x22"],
     ["nullifier", "not-hex"],
     ["domain", B32("zz")],
     ["contextHash", ""],

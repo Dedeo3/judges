@@ -152,7 +152,7 @@ export class Judges {
       address: options.verifierAddress,
       abi: judgesVerifierAbi,
       functionName: "verify",
-      args: [proof.proof, proof.walletCommitment, proof.domain, proof.nullifier, proof.contextHash, proof.wallet],
+      args: [proof.proof, proof.merkleRoot, proof.domain, proof.nullifier, proof.contextHash, proof.wallet],
       account,
       chain: options.chain,
     });

@@ -43,7 +43,8 @@ export interface JudgesConfig {
 export interface JudgesProof {
   /** ABI-encoded (uint256[2], uint256[2][2], uint256[2]) Groth16 calldata. */
   proof: `0x${string}`;
-  walletCommitment: `0x${string}`;
+  /** Redesign B: the membership-tree root the proof commits to. Must be published on-chain. */
+  merkleRoot: `0x${string}`;
   nullifier: `0x${string}`;
   domain: `0x${string}`;
   /** The action binding this proof commits to — JudgesVerifier re-derives policyHash from it. */
