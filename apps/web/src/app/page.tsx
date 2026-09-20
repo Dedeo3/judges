@@ -43,8 +43,8 @@ const DISSENT: { title: string; body: string }[] = [
     body: "Proofs are bound to a wallet and an action (§7.2), so a proof lifted from the mempool cannot be redirected. But an observer can still submit it for its rightful wallet, which merely makes the owner's own action land a moment early while consuming the nullifier. Closing that needs a per-submission nonce inside the circuit; out of MVP scope.",
   },
   {
-    title: "The credential secret is server-derived, not authenticator-derived.",
-    body: "A WebAuthn private key is non-extractable by design, so the value playing the role of credential_secret in §7.4 is HMAC(JUDGES_DOMAIN_SECRET, credentialId ‖ publicKey). This means the Judges backend can compute any registered credential's nullifiers. It cannot forge a WebAuthn assertion, so it cannot impersonate a user to a relying party, but a fully trust-minimised design would not hand the backend that capability. Named here rather than buried.",
+    title: "The server is still the gatekeeper.",
+    body: "Under the Redesign B path the identity secret is derived client-side from a wallet signature and never reaches the server, which now stores only commitments — so the backend can no longer compute anyone's nullifiers. What it can still do is decide which commitments enter the tree and which roots it posts on-chain, so it can censor or add leaves. A fully trust-minimised version needs permissionless or multi-party root updates. This does not add sybil resistance: one person can still hold several identities.",
   },
   {
     title: "unique assurance is still a policy label, not an enforced property,",
@@ -59,7 +59,7 @@ const DISSENT: { title: string; body: string }[] = [
 const steps = [
   { title: "Passkey", sub: "The private key stays on the device" },
   { title: "User verification", sub: "Biometric or PIN, checked by the device" },
-  { title: "Proof", sub: "Groth16: commitment and nullifier" },
+  { title: "Proof", sub: "Groth16: membership in the set, and a nullifier" },
   { title: "JudgesVerifier on Monad", sub: "Checks the proof, consumes the nullifier" },
   { title: "Application", sub: "DAO vote, agent registry, faucet" },
 ];
