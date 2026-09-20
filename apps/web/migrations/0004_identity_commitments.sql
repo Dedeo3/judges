@@ -5,8 +5,8 @@
 -- off-chain tree can be rebuilt deterministically and the on-chain root reproduced. A commitment
 -- is unique; re-registering the same identity is a no-op.
 create table if not exists identity_commitments (
-  commitment text primary key,           -- decimal string of the field element Poseidon(secret)
-  leaf_index bigint not null unique,      -- 0-based LeanIMT insertion index
+  commitment text primary key,                          -- decimal string of Poseidon(secret)
+  leaf_index bigint generated always as identity unique, -- DB-assigned, monotonic = LeanIMT insertion order
   created_at timestamptz not null default now()
 );
 
