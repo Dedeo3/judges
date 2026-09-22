@@ -1,187 +1,172 @@
 # Judges — Project Status
 
-_Last updated: 2026-09-19. Submission deadline: **14 Oct 2026, 10:59 WIB** (internal target: submit **13 Oct**)._
+_Last updated: 2026-09-22, on branch `redesign-b`. Submission deadline: **14 Oct 2026, 10:59 WIB**
+(internal target: submit **13 Oct**)._
 
 Judges is a privacy-preserving passkey (WebAuthn) verification layer for Web3, built for the Monad
 "Trust, Identity & AI Infrastructure" track. A user proves they hold a user-verified passkey via a
-ZK proof, and a contract on Monad blocks reuse of the same credential within an app (nullifier).
-See `Judges_README.md` for the product and `IMPLEMENTATION.md` for the phase-by-phase build log.
+ZK proof, and a contract on Monad blocks reuse of the same identity within an app (nullifier).
+See `Judges_README.md` for the product, `docs/security.md` for the audit finding and Redesign B's
+fix, and `PENJELASAN-APLIKASI.md` for a plain-language (Indonesian) walkthrough of the whole flow.
 
 ---
 
 ## 1. Where we are, in one paragraph
 
-All code is written and tested locally, **the contracts are live on Monad Testnet** (pre-B — see
-below), Neon Postgres is provisioned and migrated, and **the frontend is built** (landing page,
-developers page, restyled demos). **Redesign B is implemented on branch `redesign-b`** (12 commits):
-it fixes a critical on-chain proof-forgery flaw found in audit (the pre-B verifier accepted a proof
-over any invented secret) plus the §27.8 server-secret privacy issue, by moving the secret
-client-side and gating on-chain membership. In-repo verification passes (crypto 30 + sdk 52 tests,
-all typecheck, `next build`); it still needs the circom/Foundry pipeline + redeploy (see §3-C).
-What is **not** done: web app not deployed (no live URL yet), nothing tested with a real passkey on
-a real device, B not built/redeployed, and none of the non-code submission assets exist.
+**Redesign B is built, redeployed to Monad Testnet, and fully tested — but not yet exercised
+end-to-end by a real user.** An audit found a critical bug in the original design (any invented
+secret produced a valid proof — total sybil bypass, see `docs/security.md` C1). Redesign B fixes it:
+the identity secret is now derived client-side from a wallet signature and never reaches the
+server; the circuit proves Merkle-tree membership under a server-published root; `JudgesVerifier`
+rejects unknown roots. All of this is built, the full test suite passes (68 Foundry + 30 crypto +
+52 SDK, all real, no mocks on the critical path), and 8 fresh contracts are live on-chain. What's
+missing is the first real registration: **zero identities are registered and zero roots are posted**,
+so no proof can verify yet — that's the next concrete step, not a "someday" item. Also still open:
+Vercel deploy (no live URL), merging this branch to `main`, and every non-code task (npm, traction,
+market doc, logo, videos).
 
 ---
 
 ## 2. Done
 
-### Code (Phases 0–8c, see `IMPLEMENTATION.md`)
-- WebAuthn registration and authentication, wallet binding, ZK membership circuit (Groth16),
-  nullifier registry, `JudgesVerifier`, `MonadP256Adapter`, TypeScript SDK, three demo contracts
-  (DAO, agent registry, faucet), demo UIs, and the cross-origin popup flow for third-party sites.
-- Tests: 22 crypto + 52 SDK (vitest), 52 Foundry, 4 ZK acceptance checks, 15 popup E2E checks.
+### Code (Phases 0–8c, pre-Redesign-B — see `IMPLEMENTATION.md`)
+WebAuthn registration/authentication, wallet binding, the original ZK circuit, nullifier registry,
+`JudgesVerifier`, `MonadP256Adapter`, the SDK, three demo contracts, demo UIs, the cross-origin
+popup flow. This layer is superseded by Redesign B below wherever they overlap.
 
-### Done in this session (2026-09-19)
-| Item | Result |
+### Redesign B (this branch, `redesign-b` — 17 commits ahead of `main`)
+
+**What changed and why** (full detail: `docs/security.md`):
+- Identity secret is derived **client-side** from a wallet signature (`packages/crypto/src/identity.ts`).
+  The server never sees it — closes both the audit finding and the README §27.8 privacy gap.
+- New circuit (`judges_membership_v2.circom`) proves LeanIMT membership of `Poseidon(secret)` under
+  a public root, instead of taking the secret as a free input.
+- New `CommitmentTree` contract holds root history; only its `rootPoster` can `postRoot`.
+  `JudgesVerifier` reverts `UnknownRoot` unless the proof's root was actually published.
+- Proving moved from server to **browser** (`apps/web/src/lib/proveBrowser.ts`); `/api/prove` and
+  the old server-secret path are removed entirely.
+- Registration is now passkey-gated (`/api/commitments/register`): a fresh WebAuthn assertion is
+  required before a commitment is accepted.
+
+**Built and verified today (2026-09-22):**
+| Step | Result |
 |---|---|
-| `forge-std` added | `contracts/lib/forge-std` (git submodule) |
-| `fs_permissions` added to `contracts/foundry.toml` | lets the deploy script write `deployments/10143.env` |
-| **Contracts deployed to Monad Testnet (chain 10143)** | addresses below |
-| Faucet funded | 0.5 MON at the faucet contract |
-| DAO proposal created | `proposalCount` = 1 |
-| Neon Postgres provisioned, migrations applied | tables: `applications`, `bindings`, `credentials`, `ephemeral_state` |
-| **Redis / Upstash removed** | challenges and pending bindings now live in Neon (`ephemeral_state`) |
-| Docs cleaned of Upstash mentions | plus unused `@upstash/redis` dependency removed |
-| Codebase knowledge graph generated | `graphify-out/` (`graph.html`, `GRAPH_REPORT.md`, `graph.json`) |
-| **Frontend built** per `DESIGN-FE.md` (phases 1 to 3) | commits `d042c51`, `e42cef9`, `e0e7e72`; details below |
+| `circom` installed (was missing) | v2.2.3, native Windows |
+| v2 circuit compiled | `prover/build/judges_membership_v2.r1cs` etc. |
+| Trusted setup run (ptau 2^14) | `judges_membership_v2_final.zkey` — **single-contributor, MVP-only**, see `prover/README.md` |
+| On-chain verifier re-exported | `contracts/src/JudgesGroth16Verifier.sol` regenerated from the new zkey |
+| Test fixture regenerated | `contracts/test/JudgesVerifier.t.sol` — a real proof, not a mock |
+| Browser-prover artifacts committed | `apps/web/public/prover/` (~7 MB wasm+zkey; Vercel serves `public/` from git) |
+| Migration 0004 applied to Neon | tables `identity_commitments`, `posted_roots` (found and fixed a comment-parsing bug in `migrate.ts` along the way) |
+| **Full test suite** | **68/68 Foundry** (`--network monad --no-match-contract WebAuthnOnchainSpike`, then the spike separately — no single command runs all of it on Foundry 1.8.3), **30 crypto + 52 SDK vitest**, web `tsc`/build all pass |
+| **Redeployed to Monad Testnet** | fresh, independent 8-contract stack — see addresses below |
+| Faucet funded, DAO seeded | 0.5 MON; 2 proposals |
+| `docs/architecture.md` updated | new addresses recorded; pre-B set kept collapsed for reference |
+| Everything committed | 4 commits today, see §5 |
 
-### Deployed contracts (Monad Testnet, chain id 10143)
+### Deployed contracts — Redesign B (Monad Testnet, chain id 10143, deployed 2026-09-22)
 | Contract | Address |
 |---|---|
-| JudgesVerifier | `0xfb4FfdA8A0A7D18b5Ec111222099a334B5275b56` |
-| SybilResistantDAO | `0x5CD5a860A2c36D4Be1e47F6ab23Ce013f1a902fa` |
-| AgentRegistry | `0x02aaC9D715e962e9CCc4FEaD022DdC7f42D77779` |
-| SybilResistantFaucet | `0xb341d3108ddC579f7fa3D55B658523dcfb7A4ce1` |
-| NullifierRegistry | `0x3f73be8C30Ce340BAAA4ea2E6E89F3CeC5FE228e` |
-| Groth16Verifier | `0xc84D2b27527193700C111e6AB08E7505F52DA484` |
-| MonadP256Adapter | `0xaB41ce2D37c2EB50594416e89657443096b458bB` |
+| JudgesVerifier | `0xBF4A95EcF027c8691D32BCbbDF836c7010D3c1bD` |
+| Groth16Verifier | `0x28045186dA5cde567F13a4C7D28A874E9E27CF16` |
+| NullifierRegistry | `0x971439E9aAe7E10B4B63f3511ca54664aC5b83bA` |
+| CommitmentTree | `0x58CC9E5BbEe44D143905e34307D361f621826e8a` |
+| MonadP256Adapter | `0xf0C7A30040aef1B200D24aAb88E9F8Db4dbb0928` |
+| SybilResistantDAO | `0x79dCf1b9b4f8B69262779d802186590f2B9C97c7` |
+| AgentRegistry | `0xDc5Fe613d740B0Db00Ff92d8248ac55b31870BE5` |
+| SybilResistantFaucet | `0xd2B7F9E87C23A4f4CBa5Cf50E4e0A2A33374f899` |
 
-Deployer: `0x6d92a650aa91a42e0abb3ff36fc6d2c5051e864b`. Deploy cost about 0.39 MON. The same
-addresses are in `contracts/deployments/10143.env`.
+Deployer: `0x6d92a650aa91a42e0abb3ff36fc6d2c5051e864b` (`rootPoster` defaults to this same address —
+no separate `JUDGES_ROOT_POSTER` was set). Same addresses in `contracts/deployments/10143.env`.
+**The pre-B addresses (2026-09-19) are still on-chain but forgeable** (audit finding C1) — do not
+use them; kept in `docs/architecture.md` only as a collapsed reference.
 
 ### Frontend (`apps/web`, spec in `DESIGN-FE.md`)
-The site is designed as a court slip opinion: paper and ink, hairline rules, one red accent used only
-for a REJECTED verdict and for errors. Fonts are Newsreader and IBM Plex Mono via `next/font`.
-
-| Page | What it is |
-|---|---|
-| `/` | Landing page. Hero with the SDK snippet and a Verdict panel, a two-attempt ledger with the REJECTED stamp, then sections numbered from `src/lib/sections.ts`: Holding, Evidence (gas table), Procedure (diagram), Docket (three apps, live contract state), Dissent (limitations 6 to 10 in full) |
-| `/developers` | Quickstart taken from `docs/integration.md`, plus the deployed contract addresses |
-| `/demo`, `/demo/dao`, `/demo/agent`, `/demo/faucet` | Existing flows, restyled. A demo that receives `NullifierAlreadyUsed` shows the REJECTED stamp |
-| `/connect` | Popup consent screen. **Not restyled** (outside the spec) |
-
-- **Real data only.** The Docket lines are read live from the deployed contracts. The Verdict panel
-  reads one real transaction receipt named by `NEXT_PUBLIC_JUDGES_SAMPLE_TX` and shows an honest
-  empty state until that is set. Nothing on the page is invented.
-- **Verified:** typecheck, lint and build pass. No horizontal overflow on `/`, `/developers`, `/demo`,
-  `/demo/dao`, `/demo/agent`, `/demo/faucet` at 390, 768 and 1280px (measured in Chrome).
-- **Not verified:** any real wallet or passkey flow, so the stamp after a genuine on-chain rejection is
-  untested. Not reviewed by eye: `/developers` on mobile, `/demo/dao`, `/demo/agent`, keyboard focus.
+Built earlier as a "court slip opinion" design (paper/ink, hairline rules, one red accent for
+REJECTED/errors). Pages: `/` (landing, live contract data), `/developers` (quickstart),
+`/demo` + 3 demo pages (restyled), `/connect` (not restyled). **Not yet touched for Redesign B's
+field rename** (`walletCommitment` → `merkleRoot`) beyond what your friend already did on this
+branch (`ConnectFlow.tsx`, `demo/page.tsx` rewritten for browser proving — see `git log
+main..HEAD -- apps/web/src/app`). Your friend is expected to continue frontend work from here.
 
 ---
 
 ## 3. Remaining
 
-Ordered by what blocks what. Target dates come from the handover doc (`sisa gawean.txt`).
+Ordered by what actually blocks what — not by the original calendar, which several items have
+already passed.
 
-### A. Get the product live (was due 18 Sep — now overdue)
-- [ ] **Run it locally first** (see section 5, "Run locally"). Needs three more lines in
-  `apps/web/.env.local`: `RP_ID=localhost`, `RP_ORIGIN=http://localhost:3000`, `JUDGES_DOMAIN_SECRET`.
-- [ ] **Commit the remaining uncommitted work** (the frontend is already committed, see section 5).
-- [ ] **Deploy `apps/web` to Vercel** (root directory `apps/web`). Env vars needed:
-  `DATABASE_URL` (Neon pooled), `JUDGES_DOMAIN_SECRET`, `RP_ID`, `RP_ORIGIN`,
-  `NEXT_PUBLIC_JUDGES_NETWORK=monad-testnet`, and the four `NEXT_PUBLIC_JUDGES_*_ADDRESS`
-  values from `contracts/deployments/10143.env`. Optional, both used by the frontend:
-  `NEXT_PUBLIC_REPO_URL` (footer source link, omitted if unset) and `NEXT_PUBLIC_JUDGES_SAMPLE_TX`
-  (see the next item).
-  - `JUDGES_DOMAIN_SECRET`: generate once (`openssl rand -hex 32`), back it up, **never rotate**.
-    Rotating it invalidates every registered passkey and every consumed nullifier.
-  - `RP_ID` is the bare hostname users visit (e.g. `judges.vercel.app`). Vercel preview URLs
-    cannot be used for real passkeys.
-- [ ] **Record the deployed addresses in `docs/architecture.md`** (its address table still says
-  `_pending_`).
-- [ ] **Manual end-to-end test on a real device** (Touch ID / Windows Hello / phone), per
-  `docs/deployment.md` section 4: register passkey, bind wallet, prove, claim from the faucet twice
-  (second claim must revert `NullifierAlreadyUsed`), vote twice (same), register an agent.
-  No automated browser can do the passkey step.
-- [ ] **Fill the landing page's Verdict panel.** After the first successful on-chain
-  `JudgesVerifier.verify()` (from the faucet or DAO demo), set `NEXT_PUBLIC_JUDGES_SAMPLE_TX` to that
-  transaction hash in Vercel. The panel then shows the real `valid`, `txHash`, `domain` and
-  `nullifier`.
-- [ ] **Clean the local test data before the real deploy.** Passkeys registered locally are tied to the
-  local `JUDGES_DOMAIN_SECRET`. Production uses a different one, so clear the `credentials` and
-  `bindings` tables first, or use a separate Neon branch for local testing.
+### A. Prove Redesign B works end-to-end (blocks everything after it)
+- [ ] **Register the first identity.** Open `http://localhost:3000/demo` (dev server env is ready —
+  see §5), register a passkey, connect a wallet, sign. This calls
+  `/api/commitments/register`. Right now `identity_commitments` has **0 rows** — nothing has been
+  registered yet on this fresh deployment.
+- [ ] **Post the resulting root on-chain.** Read it from `GET /api/commitments/root`, then:
+  ```bash
+  cast send 0x58CC9E5BbEe44D143905e34307D361f621826e8a "postRoot(bytes32)" <rootHex> \
+    --rpc-url https://testnet-rpc.monad.xyz --account deployer-dio
+  ```
+  Re-post whenever new identities register (each changes the root). No proof verifies against an
+  unposted root (`UnknownRoot`) — this is the one remaining step before the demo is provable.
+- [ ] **Run the three demos end-to-end** with a real passkey + wallet: DAO vote, agent registry,
+  faucet claim, and claim/vote **twice** to see `NullifierAlreadyUsed` fire for real.
+- [ ] Measure real device proving time (Android mid-range + iPhone) and root-posting gas — not yet
+  measured on this v2 circuit specifically.
 
-### A2. Frontend follow-ups
-- [ ] Restyle `/connect` (the popup consent screen) to match, if time allows.
-- [ ] Review `/developers`, `/demo/dao`, `/demo/agent` on a phone, and check keyboard focus.
-- [ ] Add the logo to the header once it exists (the spec deliberately has no icon logo for now).
-- [ ] Set `NEXT_PUBLIC_REPO_URL` in Vercel to the public repository URL (`origin` is
-  `https://github.com/Dedeo3/judges`; confirm that is the one to show, and that it is public).
+### B. Deploy to Vercel (blocks demo video + judge access)
+- [ ] Root directory `apps/web`. Env vars: `DATABASE_URL` (Neon pooled), `RP_ID`, `RP_ORIGIN`,
+  `NEXT_PUBLIC_JUDGES_NETWORK=monad-testnet`, and the **five** `NEXT_PUBLIC_JUDGES_*_ADDRESS`
+  values (four demos + `COMMITMENT_TREE`, new in Redesign B) from `contracts/deployments/10143.env`.
+  - **`JUDGES_DOMAIN_SECRET` is no longer read anywhere in the code** — Redesign B removed the
+    server-secret path entirely. Confirmed by search; don't bother setting it for this branch.
+  - `RP_ID` must be the real hostname users visit — Vercel preview URLs get their own `RP_ID` and
+    can't share passkeys with production.
+- [ ] Clear local test data (`credentials`, `identity_commitments`, `posted_roots`) before/after the
+  local test above, if it would confuse the production dataset — or use a separate Neon branch.
 
-### B. SDK on npm (target 20 Sep)
-- [ ] Check the `@judges` npm scope is free (rename and update `docs/integration.md` if not).
-- [ ] Publish `0.x` and confirm the `docs/integration.md` example works from the published package.
+### C. Merge to `main`
+- [ ] Once A and B are proven, merge `redesign-b` → `main`. Nothing here conflicts with frontend
+  work happening in parallel unless it touches the same files (see §2 frontend note).
 
-### C. Redesign B — take the backend out of the trust path — **implemented on branch `redesign-b`**
-The secret is now derived client-side from a wallet signature (never sent to the server); the new
-circuit proves LeanIMT membership under a server-published root; `JudgesVerifier` rejects unknown
-roots (`CommitmentTree`); proving runs in the browser; registration is passkey-gated. This also
-closes the audit's critical forgery finding. Full write-up: `docs/security.md` + `IMPLEMENTATION.md`
-(Redesign B section).
+### D. SDK on npm
+- [ ] Check the `@judges` npm scope is free; publish `0.x`. Note: the SDK's public field renamed
+  `walletCommitment` → `merkleRoot` on this branch — republish after B lands, not before.
 
-Done (in-repo, verified): crypto/circuit/contracts/server/SDK/web all landed; crypto 30 + sdk 52
-tests, all typecheck, `apps/web` `next build` pass.
+### E. Traction — at least one other team/adopter conversation
+**This is the highest-priority item overall, not just one item on a list.** Founder & Market
+(25%) and Traction (20%) outweigh Technical (20%) in the rubric, and this is currently at zero.
+Nothing technical left on this list matters as much as one real conversation this week.
+- [ ] List candidates, pitch, offer a pairing call, collect proof (repo/PR, tx hash, testimonial).
 
-Remaining (needs the toolchain / a device, then merge):
-- [ ] Build v2 circuit + run the new trusted setup (`circom`), re-export `JudgesGroth16Verifier.sol`
-  + `contracts/test/JudgesVerifier.t.sol`, `forge test`.
-- [ ] Copy + commit the v2 `wasm`/`zkey` to `apps/web/public/prover/` (Vercel serves them).
-- [ ] Redeploy contracts (addresses change), set `rootPoster`, post the first root.
-- [ ] Device test: passkey register + wallet signature + prove end-to-end.
-- [ ] Measure on real phones (Android mid-range + iPhone): proving time, root-posting gas, whether
-  the deterministic wallet signature holds across supported wallets.
-- [ ] Merge `redesign-b` to `main`.
+### F. Founder & market
+- [ ] Named prospective adopters, comparison table (World ID, Human Passport, BrightID),
+  post-event plan, team profile.
 
-### D. Traction — at least one other team integrates (live by 4 Oct)
-- [ ] List 10–15 candidate teams/projects, pitch them, offer a pairing call.
-- [ ] Collect proof (repo/PR, live URL, tx hash, testimonial) in one tracking sheet.
-
-### E. Founder & market (target 1 Oct)
-- [ ] Named prospective adopters with concrete needs.
-- [ ] Comparison table vs World ID, Human Passport, BrightID.
-- [ ] Post-event plan (mainnet, multi-party trusted setup, policy engine, business model).
-- [ ] Team profile.
-
-### F. Submission assets (target 11 Oct)
-- [ ] Logo (target 25 Sep).
-- [ ] Demo video, 3 minutes max, live product. Record **after** the final deploy.
-- [ ] Pitch video, 2 minutes max.
-- [ ] Judge access instructions (URL, supported browsers, add Monad testnet, testnet faucet link,
-  demo steps, note that a passkey needs Touch ID / Windows Hello / a phone).
-- [ ] Optional: ERC-8004 in the demo agent, only if everything above is safe.
-
-### Schedule (from the handover doc)
-| Window | Target |
-|---|---|
-| 13–20 Sep | Live deploy, start Design B, npm SDK, outreach list |
-| 21–27 Sep | Design B done, logo, outreach running |
-| 28 Sep – 4 Oct | Redeploy on Design B, other team live, market doc |
-| 5–11 Oct | Videos, judge instructions, feature freeze |
-| 12–13 Oct | Buffer, **submit 13 Oct** |
+### G. Submission assets
+- [ ] Logo, demo video (≤3 min, **record after** the Vercel deploy + a real device test), pitch
+  video (≤2 min), judge access instructions.
+- [ ] Optional: ERC-8004 in the demo agent — only if A–F are done with time to spare.
 
 ---
 
-## 4. Known limitations (be honest about these in the submission)
-- Judges proves "a user-verified passkey holder is present", **not** "one unique human". Registration
-  uses `attestationType: "none"` with no rate limit, so one person can hold many passkeys.
-- The trusted setup is single-contributor and local. Fine for a demo, not production-safe.
-- The credential secret is server-derived on `main`; **fixed on branch `redesign-b`** (client-side
-  secret + on-chain membership), not yet merged/redeployed. Pre-B contracts are also forgeable (the
-  audit finding in §1) until B is deployed.
-- A nullifier can be griefed (burned early by an observer) but not stolen.
-- Groth16 verification costs about 1.13M gas per action on Monad.
-- Nothing has been exercised with a real authenticator yet.
+## 4. Known limitations — state these plainly, they are a credibility asset, not a weakness
+
+- Judges proves "a user-verified passkey holder stands behind this action", **not** "one unique
+  human". No rate limit on registration; one person can hold many passkeys.
+- **The server still gatekeeps.** It decides which commitments enter the tree and controls
+  `rootPoster` (when a root becomes usable on-chain). Redesign B removes the server's ability to
+  *compute* a user's secret — it does not remove its *gatekeeping* role. Full discussion:
+  `docs/security.md` → "Redesign B — security model and remaining limitations". This is not solved
+  and is not being solved before the deadline — say so proactively in the pitch.
+  See also `PENJELASAN-APLIKASI.md` §"is this decentralized?" for the plain-language version.
+- Trusted setup is single-contributor and local (both v1 and v2). Fine for a demo, not for
+  production. A real deployment needs a multi-party ceremony.
+- A nullifier can be griefed (submitted early by an observer) but not stolen.
+- Identity-secret determinism depends on the wallet: standard EOAs sign deterministically (RFC
+  6979); some smart-contract/MPC wallets may not, and would fail to reproduce their commitment.
+  Not yet measured against Judges' actually-supported wallets.
+- Groth16 verification costs roughly 1.1M gas per action on Monad (pre-B measurement; v2's cost has
+  not been separately measured yet).
 
 Full list: `Judges_README.md` §27.
 
@@ -189,53 +174,61 @@ Full list: `Judges_README.md` §27.
 
 ## 5. Working notes
 
-**Committed:** the frontend, in three commits (`d042c51` landing page, `e42cef9` `/developers`,
-`e0e7e72` demo restyle).
+**Committed today, on `redesign-b`, in order:**
+1. `11609c9` — fix migration runner's `--` comment handling
+2. `ed1d7db` — v2 circuit build, trusted setup, re-exported verifier + test fixture, browser-prover
+   artifacts
+3. `3785faf` — Redesign B redeploy record (addresses, broadcast log, `docs/architecture.md`)
+4. `b032bd3` — `PENJELASAN-APLIKASI.md` (Indonesian walkthrough)
 
-**Not committed yet:** the Redis-to-Postgres change (`apps/web/src/lib/challengeStore.ts`,
-`bindingStore.ts`, `ephemeralState.ts`, the `webauthn` route imports, `prove.ts`,
-`migrations/0003_ephemeral_state.sql`), the doc edits, the `@upstash/redis` removal
-(`package.json`, `pnpm-lock.yaml`), the `forge-std` submodule, `contracts/foundry.toml`, and the
-untracked `contracts/deployments/`, `contracts/broadcast/`, `contracts/foundry.lock`,
-`graphify-out/`, `DESIGN-FE.md`, `STATUS.md` and `sisa gawean.txt`.
-
-**`.gitignore` was audited (2026-09-19).** `contracts/cache/` (forge "sensitive values") and every `.env`
-are ignored. `graphify-out/` now shares only `graph.json`, `graph.html`, `GRAPH_REPORT.md` and
-`manifest.json`; its cache, interpreter path and scan root are ignored. Timestamped
-`contracts/broadcast/**/run-<n>.json` copies are ignored (`run-latest.json` is the shared record).
-`contracts/lib/` is no longer ignored, because `forge-std` is a tracked submodule, staged at `v1.16.2`.
-`contracts/deployments/10143.env` is meant to be committed: it holds public addresses only.
+Working tree is clean. Nothing pushed — review before pushing.
 
 **Secrets.** Never put a private key in `.env`, chat, or the repo. Deploy with a Foundry keystore
-(`--account <name>`) or a hardware wallet. Database URLs live in gitignored `.env` files only.
+(`--account <name>`) or a hardware wallet. Database URLs live in gitignored `.env`/`.env.local`
+files only. One earlier mistake this session: a `cat` of `apps/web/.env.local` briefly printed the
+Neon connection string (with password) into a chat transcript — rotate that Neon password if you
+consider it sensitive.
+
+**Local dev server is already running and configured for this deployment** (as of 2026-09-22):
+```bash
+pnpm --filter @judges/web dev      # http://localhost:3000
+```
+`apps/web/.env.local` has `DATABASE_URL`, all five `NEXT_PUBLIC_JUDGES_*_ADDRESS` values (including
+`COMMITMENT_TREE`), `NEXT_PUBLIC_JUDGES_NETWORK`, and `RP_ID`/`RP_ORIGIN`/`RP_NAME` for `localhost`.
+Ready for the §3-A registration step with no further setup.
 
 **Commands**
 ```bash
-# Foundry needs the Monad network flag for the fork test:
-cd contracts && forge test --network monad
-# Offline: SKIP_FORK_TESTS=1 forge test
+# Foundry: no single command runs the full suite on 1.8.3 — two commands do:
+cd contracts
+forge test --network monad --no-match-contract WebAuthnOnchainSpike   # 64/64
+forge test --match-contract WebAuthnOnchainSpike                       # 4/4 (needs default/ethereum EVM)
+# Offline (skips both fork-dependent suites): SKIP_FORK_TESTS=1 forge test
 
 # Vitest (run per package; the root `pnpm test` script's quoted filter matches nothing on PowerShell):
-pnpm --filter @judges/crypto run test
-pnpm --filter @judges/sdk run test
+pnpm --filter @judges/crypto run test   # 30 tests
+pnpm --filter @judges/sdk run test      # 52 tests
 
 # Apply migrations (migrate.ts does not auto-load env files):
-cd apps/web && pnpm exec tsx --env-file=../../.env scripts/migrate.ts
+cd apps/web && pnpm exec tsx --env-file=.env.local scripts/migrate.ts
+
+# Rebuild the v2 prover from scratch (only if the circuit or trusted setup changes):
+cd prover
+pnpm run build   # needs circom on PATH
+pnpm run setup   # several minutes; if it hangs at ~0% CPU for a while, kill and retry —
+                 # looked like Windows Defender scanning the freshly-written 5MB zkey mid-read
+npx snarkjs zkey export solidityverifier build/judges_membership_v2_final.zkey ../contracts/src/JudgesGroth16Verifier.sol
+pnpm exec tsx scripts/export_verifier_fixture_v2.ts
 ```
 
-**Run locally** (from the repo root, in PowerShell):
-```bash
-pnpm --filter @judges/web dev      # then open http://localhost:3000
-```
-The pages render as soon as `apps/web/.env.local` has `DATABASE_URL`, `NEXT_PUBLIC_JUDGES_NETWORK` and the
-four `NEXT_PUBLIC_JUDGES_*_ADDRESS` values. Passkey register, bind and prove also need `RP_ID=localhost`,
-`RP_ORIGIN=http://localhost:3000` and `JUDGES_DOMAIN_SECRET` (generate with
-`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`). A wallet extension on Monad
-Testnet with some testnet MON is needed for the demo transactions. Suggested order: `/demo` (register,
-connect, bind), then `/demo/faucet` twice; the second claim should show the REJECTED stamp.
+**Env note.** Foundry reads `.env` from the project root that contains `foundry.toml`
+(`contracts/.env`), not the repo-root `.env`. Next.js reads `apps/web/.env.local`, not the
+repo-root `.env` either — the repo-root `.env` is effectively unused by any running code right now.
 
-**Env note.** Foundry reads `.env` from the project root that contains `foundry.toml`, so RPC
-variables for `forge` belong in `contracts/.env`, not the repo-root `.env`.
+**`NEXT_PUBLIC_JUDGES_COMMITMENT_TREE_ADDRESS`** is documentation-only as of this branch — no
+frontend code reads it yet (root posting is a manual `cast send`; root computation is server-side
+from Postgres, not read from chain). Confirmed by search, not a bug — just worth knowing before
+"fixing" it.
 
-**Codebase map.** `graphify-out/graph.html` (interactive) and `GRAPH_REPORT.md` describe the codebase
-structure for anyone joining.
+**Codebase map.** `graphify-out/graph.html` (interactive) and `GRAPH_REPORT.md` describe the
+pre-Redesign-B codebase structure; not regenerated since B landed.
