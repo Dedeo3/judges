@@ -17,7 +17,9 @@ async function main() {
 
   for (const file of files) {
     console.log(`Applying ${file}...`);
-    const contents = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+    // Strip `--` comments first: statements are split on `;`, and a `;` inside a comment would cut it
+    // in half and send the second half to Postgres as SQL.
+    const contents = readFileSync(join(MIGRATIONS_DIR, file), "utf8").replace(/--.*$/gm, "");
     const statements = contents
       .split(";")
       .map((s) => s.trim())

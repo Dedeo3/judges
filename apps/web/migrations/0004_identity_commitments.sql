@@ -3,7 +3,7 @@
 --
 -- Leaves are append-only and ordered by `leaf_index` (the LeanIMT insertion order), so the
 -- off-chain tree can be rebuilt deterministically and the on-chain root reproduced. A commitment
--- is unique; re-registering the same identity is a no-op.
+-- is unique, and re-registering the same identity is a no-op.
 create table if not exists identity_commitments (
   commitment text primary key,                          -- decimal string of Poseidon(secret)
   leaf_index bigint generated always as identity unique, -- DB-assigned, monotonic = LeanIMT insertion order
