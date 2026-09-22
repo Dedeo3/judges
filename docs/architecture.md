@@ -28,21 +28,38 @@ Filled in from `contracts/deployments/<chainId>.env` after running the deploy sc
 
 ### Monad Testnet (chain ID 10143)
 
-> These are the **pre-Redesign-B** deployment (2026-09-19). Redesign B changes `JudgesVerifier`
-> (adds the CommitmentTree root check) and the Groth16 verifying key, so **every address below
-> changes on the B redeploy** — re-run the deploy script after the v2 trusted setup and update
-> this table. `CommitmentTree` does not exist in the pre-B deployment.
+> **Redesign B deployment (2026-09-22).** These addresses supersede the pre-B set (2026-09-19,
+> below) — `JudgesVerifier` now gates on `CommitmentTree`, and the Groth16 verifying key changed
+> with the v2 circuit/trusted setup. The pre-B contracts still exist on-chain but are forgeable
+> (see `docs/security.md` C1) and should not be used.
+
+| Contract | Address |
+|---|---|
+| JudgesVerifier | `0xBF4A95EcF027c8691D32BCbbDF836c7010D3c1bD` |
+| Groth16Verifier | `0x28045186dA5cde567F13a4C7D28A874E9E27CF16` |
+| NullifierRegistry | `0x971439E9aAe7E10B4B63f3511ca54664aC5b83bA` |
+| CommitmentTree | `0x58CC9E5BbEe44D143905e34307D361f621826e8a` |
+| MonadP256Adapter | `0xf0C7A30040aef1B200D24aAb88E9F8Db4dbb0928` |
+| SybilResistantDAO | `0x79dCf1b9b4f8B69262779d802186590f2B9C97c7` |
+| AgentRegistry | `0xDc5Fe613d740B0Db00Ff92d8248ac55b31870BE5` |
+| SybilResistantFaucet | `0xd2B7F9E87C23A4f4CBa5Cf50E4e0A2A33374f899` |
+
+Faucet funded with 0.5 MON; DAO has 2 seeded proposals (both created 2026-09-22).
+
+<details>
+<summary>Pre-B deployment (2026-09-19) — forgeable, kept for reference only</summary>
 
 | Contract | Address |
 |---|---|
 | JudgesVerifier | `0xfb4FfdA8A0A7D18b5Ec111222099a334B5275b56` |
 | Groth16Verifier | `0xc84D2b27527193700C111e6AB08E7505F52DA484` |
 | NullifierRegistry | `0x3f73be8C30Ce340BAAA4ea2E6E89F3CeC5FE228e` |
-| CommitmentTree | _pending (Redesign B — not in the pre-B deployment)_ |
 | MonadP256Adapter | `0xaB41ce2D37c2EB50594416e89657443096b458bB` |
 | SybilResistantDAO | `0x5CD5a860A2c36D4Be1e47F6ab23Ce013f1a902fa` |
 | AgentRegistry | `0x02aaC9D715e962e9CCc4FEaD022DdC7f42D77779` |
 | SybilResistantFaucet | `0xb341d3108ddC579f7fa3D55B658523dcfb7A4ce1` |
+
+</details>
 
 ### Monad Mainnet (chain ID 143)
 
