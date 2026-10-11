@@ -1073,7 +1073,7 @@ gitignored.
 | Layer | Shipped choice | Why |
 |---|---|---|
 | Frontend | Next.js 16 + TypeScript | Fast demo + ecosystem |
-| Wallet | raw EIP-1193 + viem | One account, one chain — a connector library would be a large dependency for that. The SDK accepts any viem `WalletClient`, so integrators bring their own stack. |
+| Wallet | Privy (wallet-only login) + viem | Demo pages need one account, any wallet (MetaMask, WalletConnect, Coinbase Wallet, etc.), with sane network-switch behaviour instead of hand-rolled `window.ethereum` calls. The SDK itself still accepts any viem `WalletClient`, so integrators bring their own stack. |
 | WebAuthn | `@simplewebauthn/server` + `/browser`, discoverable credentials | Standards-based; resident keys mean authentication needs no username lookup |
 | Backend | Next.js API routes (Vercel Functions) | Same deployable unit as the frontend — no server to keep alive, fits free tiers |
 | DB | Neon (serverless Postgres, HTTP driver) | Credential/app/binding records; pooled string for serverless |

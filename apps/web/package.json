@@ -12,15 +12,16 @@
     "abis:export": "tsx scripts/export-abis.ts"
   },
   "dependencies": {
+    "@judges/crypto": "workspace:*",
+    "@judges/sdk": "workspace:*",
+    "@judges/types": "workspace:*",
+    "@judges/webauthn": "workspace:*",
+    "@neondatabase/serverless": "^0.10.0",
+    "@privy-io/react-auth": "^3.48.1",
+    "@simplewebauthn/browser": "^11.0.0",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "@judges/types": "workspace:*",
-    "@judges/webauthn": "workspace:*",
-    "@judges/crypto": "workspace:*",
-    "@judges/sdk": "workspace:*",
-    "@simplewebauthn/browser": "^11.0.0",
-    "@neondatabase/serverless": "^0.10.0",
     "snarkjs": "^0.7.5",
     "viem": "^2.21.0"
   },

@@ -5,7 +5,7 @@ import { toJudgesProof, type JudgesProof } from "@judges/sdk";
 import type { Address, WalletClient } from "viem";
 import { explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesConfig";
 import { proveMembershipInBrowser } from "@/lib/proveBrowser";
-import { connectWallet } from "@/lib/wallet";
+import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
 import { Marginalia } from "./Document";
 import { SiteFrame } from "./SiteFrame";
 import { Verdict } from "./Verdict";
@@ -49,6 +49,7 @@ export function DemoShell({
   const [account, setAccount] = useState<Address | null>(null);
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [status, setStatus] = useState<DemoStatus>({ kind: "idle" });
+  const connectWallet = useConnectJudgesWallet();
 
   const notConfigured = missingConfigReason(demo);
   const busy = status.kind === "busy";
@@ -62,7 +63,7 @@ export function DemoShell({
     } catch (err) {
       setStatus({ kind: "error", message: err instanceof Error ? err.message : "Wallet connection failed" });
     }
-  }, []);
+  }, [connectWallet]);
 
   const handleRun = useCallback(async () => {
     if (!account || !walletClient) return;

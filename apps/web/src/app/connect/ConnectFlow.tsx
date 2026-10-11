@@ -9,7 +9,7 @@ import {
   type ConnectRequest,
 } from "@judges/sdk";
 import { proveMembershipInBrowser } from "@/lib/proveBrowser";
-import { connectWallet } from "@/lib/wallet";
+import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
 
 /**
  * The popup a third-party site opens to get a proof. It runs on Judges' own origin and hands back
@@ -70,6 +70,7 @@ function initialState(): PageState {
 
 export default function ConnectFlow() {
   const [state, setState] = useState<PageState>(initialState);
+  const connectWallet = useConnectJudgesWallet();
 
   async function handleVerify(request: ConnectRequest, effectiveAppId: string) {
     setState({ kind: "working", request, effectiveAppId, message: "Connecting your wallet…" });

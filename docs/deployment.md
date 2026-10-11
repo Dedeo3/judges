@@ -127,20 +127,21 @@ Environment variables:
 | Variable | Value |
 |---|---|
 | `DATABASE_URL` | Neon pooled connection string |
-| `JUDGES_DOMAIN_SECRET` | a fresh 32-byte random secret (`openssl rand -hex 32`) |
 | `RP_ID` | your deployed hostname, e.g. `judges.vercel.app` — **no scheme, no port** |
 | `RP_ORIGIN` | `https://<that hostname>` |
 | `NEXT_PUBLIC_JUDGES_NETWORK` | `monad-testnet` |
 | `NEXT_PUBLIC_JUDGES_*_ADDRESS` | from `contracts/deployments/<chainId>.env` |
+| `NEXT_PUBLIC_PRIVY_APP_ID` | from an app at dashboard.privy.io, Login methods = Wallet only |
 
-Two things that will bite otherwise:
+One thing that will bite otherwise:
 
-- **`JUDGES_DOMAIN_SECRET` is load-bearing and permanent.** Every credential's secret, commitment,
-  and nullifier is derived from it. Rotating it silently invalidates every registered passkey and
-  every nullifier already consumed on-chain. Set it once, keep it backed up, never rotate casually.
 - **`RP_ID` must match the hostname users visit.** WebAuthn is origin-scoped; a mismatch makes
   every ceremony fail with an opaque browser error. Preview deployments get different hostnames,
   so passkeys registered on one won't work on another.
+
+`JUDGES_DOMAIN_SECRET` is gone as of Redesign B — the identity secret is derived client-side from
+a wallet signature and the server never computes it, so there's nothing left for that secret to
+protect. Do not set it; nothing reads it.
 
 Third-party sites reach Judges through the `/connect` popup on this same deployment, so no extra
 configuration is needed for them: `RP_ID`/`RP_ORIGIN` stay Judges' own hostname, and integrators set

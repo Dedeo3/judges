@@ -6,7 +6,7 @@ import type { Address, WalletClient } from "viem";
 import { Marginalia } from "@/components/Document";
 import { SiteFrame } from "@/components/SiteFrame";
 import { Verdict } from "@/components/Verdict";
-import { connectWallet } from "@/lib/wallet";
+import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
 import { proveMembershipInBrowser, registerIdentity } from "@/lib/proveBrowser";
 
 type Status = { kind: "idle" } | { kind: "success"; message: string } | { kind: "error"; message: string };
@@ -18,6 +18,7 @@ export default function DemoPage() {
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
+  const connectWallet = useConnectJudgesWallet();
 
   const signIdentityMessage = (message: string) => {
     if (!account || !walletClient) throw new Error("connect a wallet first");
