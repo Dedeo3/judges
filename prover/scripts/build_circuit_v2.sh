@@ -9,9 +9,10 @@ if ! command -v circom >/dev/null 2>&1; then
 fi
 
 mkdir -p build
-circom circuits/judges_membership.circom \
+# circomlib supplies both poseidon.circom and comparators.circom (IsEqual) used by the circuit.
+circom circuits/judges_membership_v2.circom \
   --r1cs --wasm --sym \
   -o build \
   -l node_modules/circomlib/circuits
 
-echo "Compiled build/judges_membership.r1cs, build/judges_membership.sym, build/judges_membership_js/judges_membership.wasm"
+echo "Compiled build/judges_membership_v2.r1cs, build/judges_membership_v2.sym, build/judges_membership_v2_js/judges_membership_v2.wasm"

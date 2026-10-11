@@ -56,14 +56,14 @@ contract SybilResistantDAO {
         uint256 proposalId,
         bool support,
         bytes calldata proof,
-        bytes32 walletCommitment,
+        bytes32 merkleRoot,
         bytes32 nullifier,
         address wallet
     ) external {
         if (!proposals[proposalId].exists) revert UnknownProposal();
 
-        // Reverts on an invalid proof, a wallet/action mismatch, or a reused nullifier.
-        judges.verify(proof, walletCommitment, domain, nullifier, contextHashFor(proposalId, support), wallet);
+        // Reverts on an unknown root, an invalid proof, a wallet/action mismatch, or a reused nullifier.
+        judges.verify(proof, merkleRoot, domain, nullifier, contextHashFor(proposalId, support), wallet);
 
         if (support) {
             proposals[proposalId].yesVotes++;

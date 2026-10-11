@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { toField } from "./field";
+import { sha256 } from "viem";
+import { hashBytesToField } from "./field";
 
 /**
  * policyHash = toField(sha256(contextHash ‖ wallet))
@@ -27,12 +27,10 @@ export function derivePolicyHash(params: { contextHash: Uint8Array; wallet: Uint
     throw new Error(`wallet must be 20 bytes, got ${params.wallet.length}`);
   }
 
-  const digest = createHash("sha256")
-    .update(params.contextHash)
-    .update(params.wallet)
-    .digest();
-
-  return toField(digest);
+  const buf = new Uint8Array(52);
+  buf.set(params.contextHash, 0);
+  buf.set(params.wallet, 32);
+  return hashBytesToField(buf);
 }
 
 /** Hex-string convenience wrapper: `contextHash` as 0x + 64 hex chars, `wallet` as an 0x address. */
@@ -45,7 +43,7 @@ export function derivePolicyHashFromHex(params: { contextHash: string; wallet: s
 
 /** Default context when an app doesn't bind a specific action: just the assurance level. */
 export function assuranceContextHash(assurance: string): Uint8Array {
-  return createHash("sha256").update(assurance).digest();
+  return sha256(new TextEncoder().encode(assurance), "bytes");
 }
 
 function hexToBytes(value: string, expectedLength: number): Uint8Array {

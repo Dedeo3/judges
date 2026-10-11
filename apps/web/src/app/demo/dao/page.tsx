@@ -41,7 +41,7 @@ export default function DaoDemoPage() {
             address: addresses.dao!,
             abi: daoAbi,
             functionName: "vote",
-            args: [BigInt(proposalId), support, proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet],
+            args: [BigInt(proposalId), support, proof.proof, proof.merkleRoot, proof.nullifier, proof.wallet],
             account,
             chain: walletClient.chain,
           }),

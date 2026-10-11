@@ -1568,6 +1568,27 @@ Judges should explicitly acknowledge:
     repriced at 5× Ethereum. Benchmarks taken on a local Foundry EVM read Ethereum prices and
     understate this by roughly 845,000 gas. See §8.1.
 
+### Found in security audit (2026-09), addressed by Redesign B
+
+11. **Pre-B, any proof was forgeable on-chain (CRITICAL, now fixed).** The pre-B membership
+    circuit took the credential secret and public-key hash as free private inputs and proved only
+    that they hash to the public commitment/nullifier; nothing on-chain checked the commitment
+    against a registered set. So anyone could pick an arbitrary secret, compute a matching
+    commitment/nullifier from the public circuit artifacts, and submit a valid proof for any
+    wallet — with no passkey and no server secret. This was confirmed by generating a forged proof
+    that verifies against the committed verifying key. It invalidated the §27.8 assumption that
+    "only the backend can produce a valid commitment/nullifier". **Redesign B fixes it**: the
+    circuit proves LeanIMT membership of `Poseidon(secret)` under a server-published Merkle root,
+    and `JudgesVerifier` rejects any root the on-chain `CommitmentTree` did not publish. See
+    `docs/security.md`.
+12. **Redesign B still trusts the server as gatekeeper, and is still not sybil resistance.** B
+    removes the server's ability to learn a user's secret or nullifiers (closing #8) and closes the
+    forgery above, but the server still decides which commitments enter the tree and which roots are
+    posted, so it can censor or add leaves. Registration remains `attestationType: "none"` with no
+    rate limit, so B does not make identities unique. And the client-derived secret assumes the
+    wallet signs deterministically, which must be verified per supported wallet (smart-contract/MPC
+    wallets may not). B also introduces its own single-contributor trusted setup (see #6).
+
 Being explicit about these limitations is a feature, not a weakness: it gives judges confidence that the security model is understood.
 
 ---

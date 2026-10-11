@@ -40,13 +40,13 @@ contract AgentRegistry {
     function registerAgent(
         string calldata name,
         bytes calldata proof,
-        bytes32 walletCommitment,
+        bytes32 merkleRoot,
         bytes32 nullifier,
         address wallet
     ) external returns (uint256 agentId) {
         if (bytes(name).length == 0) revert EmptyName();
 
-        judges.verify(proof, walletCommitment, domain, nullifier, contextHashFor(name), wallet);
+        judges.verify(proof, merkleRoot, domain, nullifier, contextHashFor(name), wallet);
 
         agentId = ++agentCount;
         agents[agentId] = Agent({owner: wallet, name: name, registeredAt: block.timestamp});

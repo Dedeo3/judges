@@ -101,3 +101,8 @@ Thumbs.db
 # The external-dapp example installs @judges/sdk from a locally packed tarball whose integrity hash
 # changes on every repack, so a committed lockfile would break `npm ci` for everyone else.
 examples/external-dapp/package-lock.json
+
+# Redesign B browser-proving artifacts (apps/web/public/prover/*.wasm, *.zkey) are NOT ignored:
+# Vercel serves the public/ directory straight from git, so they must be committed to be reachable
+# at runtime. They are the matched pair of the deployed JudgesGroth16Verifier — see
+# apps/web/public/prover/README.md.

@@ -1,24 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { startAuthentication, startRegistration } from "@simplewebauthn/browser";
-import { Judges, type JudgesProof } from "@judges/sdk";
+import { startRegistration } from "@simplewebauthn/browser";
+import type { Address, WalletClient } from "viem";
 import { Marginalia } from "@/components/Document";
 import { SiteFrame } from "@/components/SiteFrame";
 import { Verdict } from "@/components/Verdict";
-// Imported for its `window.ethereum` global declaration, kept in one place.
-import "@/lib/wallet";
+import { connectWallet } from "@/lib/wallet";
+import { proveMembershipInBrowser, registerIdentity } from "@/lib/proveBrowser";
 
 type Status = { kind: "idle" } | { kind: "success"; message: string } | { kind: "error"; message: string };
 
 export default function DemoPage() {
   const [label, setLabel] = useState("");
   const [domain, setDomain] = useState("judges-demo");
-  const [wallet, setWallet] = useState<string | null>(null);
+  const [account, setAccount] = useState<Address | null>(null);
+  const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
 
-  async function handleRegister() {
+  const signIdentityMessage = (message: string) => {
+    if (!account || !walletClient) throw new Error("connect a wallet first");
+    return walletClient.signMessage({ account, message });
+  };
+
+  async function handleRegisterPasskey() {
     setBusy(true);
     setStatus({ kind: "idle" });
     try {
@@ -28,19 +34,16 @@ export default function DemoPage() {
         body: JSON.stringify({ label }),
       });
       const { sessionId, options } = await optionsRes.json();
-
       const attestation = await startRegistration({ optionsJSON: options });
-
       const verifyRes = await fetch("/api/webauthn/register/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId, response: attestation }),
       });
       const result = await verifyRes.json();
-
       setStatus(
         result.verified
-          ? { kind: "success", message: `Passkey registered (credential ${result.credentialId.slice(0, 12)}…)` }
+          ? { kind: "success", message: `Passkey registered (credential ${result.credentialId.slice(0, 12)}…).` }
           : { kind: "error", message: `Registration rejected: ${result.reason}` },
       );
     } catch (err) {
@@ -50,103 +53,71 @@ export default function DemoPage() {
     }
   }
 
-  async function handleAuthenticate() {
-    setBusy(true);
-    setStatus({ kind: "idle" });
+  async function handleConnectWallet() {
     try {
-      const optionsRes = await fetch("/api/webauthn/auth/options", { method: "POST" });
-      const { sessionId, options } = await optionsRes.json();
-
-      const assertion = await startAuthentication({ optionsJSON: options });
-
-      const verifyRes = await fetch("/api/webauthn/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, response: assertion }),
-      });
-      const result = await verifyRes.json();
-
-      setStatus(
-        result.verified
-          ? { kind: "success", message: `Verified as user ${result.userId} (userVerified: ${result.userVerified})` }
-          : { kind: "error", message: `Verification rejected: ${result.reason}` },
-      );
+      const connected = await connectWallet();
+      setAccount(connected.account);
+      setWalletClient(connected.walletClient);
+      setStatus({ kind: "idle" });
     } catch (err) {
-      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Authentication failed" });
-    } finally {
-      setBusy(false);
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Wallet connection failed" });
     }
   }
 
-  async function handleProveMembership() {
-    if (!wallet) {
-      setStatus({ kind: "error", message: "Connect a wallet first — proofs are bound to one wallet" });
+  async function handleRegisterIdentity() {
+    if (!account) {
+      setStatus({ kind: "error", message: "Connect a wallet first — your identity secret is derived from its signature." });
       return;
     }
     setBusy(true);
     setStatus({ kind: "idle" });
     try {
-      const judges = new Judges({ network: "monad-testnet", appId: domain });
-      const proof: JudgesProof = await judges.prove({
+      const result = await registerIdentity({ wallet: account, signIdentityMessage });
+      setStatus(
+        result.ok
+          ? {
+              kind: "success",
+              message: `Identity registered (leaf ${result.leafIndex}). Root ${result.rootHex?.slice(0, 12)}… must be posted on-chain before proofs verify.`,
+            }
+          : { kind: "error", message: `Registration rejected: ${result.reason}` },
+      );
+    } catch (err) {
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Identity registration failed" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleTestProve() {
+    if (!account) {
+      setStatus({ kind: "error", message: "Connect a wallet first — proofs are bound to one wallet." });
+      return;
+    }
+    setBusy(true);
+    setStatus({ kind: "idle" });
+    try {
+      const result = await proveMembershipInBrowser({
+        appId: domain,
+        wallet: account,
         assurance: "user_verified",
-        wallet: wallet as `0x${string}`,
+        signIdentityMessage,
       });
-      setStatus({
-        kind: "success",
-        message: `ZK proof generated, bound to ${proof.wallet.slice(0, 6)}…${proof.wallet.slice(-4)}. nullifier ${proof.nullifier.slice(0, 12)}…, domain ${proof.domain.slice(0, 12)}… (onchain verify() needs a deployed JudgesVerifier — Phase 8)`,
-      });
+      setStatus(
+        result.verified
+          ? {
+              kind: "success",
+              message: `ZK proof generated in-browser, bound to ${account.slice(0, 6)}…${account.slice(-4)}. nullifier ${result.nullifier?.slice(0, 12)}…, domain ${result.domain?.slice(0, 12)}….`,
+            }
+          : {
+              kind: "error",
+              message:
+                result.reason === "identity_not_registered"
+                  ? "Register your identity above first."
+                  : `Proof failed: ${result.reason}`,
+            },
+      );
     } catch (err) {
       setStatus({ kind: "error", message: err instanceof Error ? err.message : "Proof generation failed" });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleConnectWallet() {
-    if (!window.ethereum) {
-      setStatus({ kind: "error", message: "No injected wallet found (install MetaMask or similar)" });
-      return;
-    }
-    const accounts = (await window.ethereum.request({ method: "eth_requestAccounts" })) as string[];
-    setWallet(accounts[0] ?? null);
-  }
-
-  async function handleBindWallet() {
-    if (!wallet || !window.ethereum) {
-      setStatus({ kind: "error", message: "Connect a wallet first" });
-      return;
-    }
-    setBusy(true);
-    setStatus({ kind: "idle" });
-    try {
-      const challengeRes = await fetch("/api/bindings/challenge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, domain }),
-      });
-      const { sessionId, options, message } = await challengeRes.json();
-
-      const walletSignature = await window.ethereum.request({
-        method: "personal_sign",
-        params: [message, wallet],
-      });
-
-      const assertion = await startAuthentication({ optionsJSON: options });
-
-      const verifyRes = await fetch("/api/bindings/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, walletSignature, response: assertion }),
-      });
-      const result = await verifyRes.json();
-
-      setStatus(
-        result.verified
-          ? { kind: "success", message: `Bound ${result.wallet} to credential ${result.credentialId.slice(0, 12)}… in domain "${result.domain}"` }
-          : { kind: "error", message: `Binding rejected: ${result.reason}` },
-      );
-    } catch (err) {
-      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Binding failed" });
     } finally {
       setBusy(false);
     }
@@ -157,62 +128,67 @@ export default function DemoPage() {
       <article className="sec" style={{ borderTop: 0 }}>
         <div className="sec-side">
           <span className="sec-num">Demos</span>
-          <Marginalia>Registration and verification run against this deployment&apos;s own backend and database.</Marginalia>
+          <Marginalia>
+            A passkey gates registration (a real user is present); your identity secret is derived from a wallet
+            signature and never leaves this device.
+          </Marginalia>
         </div>
 
         <div className="sec-body">
-          <h1 className="h1-demo">Passkey demo</h1>
-          <p>Register a passkey and verify it, then bind that passkey to a wallet.</p>
+          <h1 className="h1-demo">Register your identity</h1>
+          <p>
+            Two steps, once per device: create a passkey, then register an identity. The identity commitment is
+            <code> Poseidon(secret)</code> where the secret comes from a wallet signature — the server stores the
+            commitment, never the secret.
+          </p>
 
+          <h2>1. Passkey</h2>
           <div className="stack">
             <label className="field">
               Display name (optional)
               <input value={label} onChange={(e) => setLabel(e.target.value)} disabled={busy} />
             </label>
-            <button className="btn" onClick={handleRegister} disabled={busy}>
+            <button className="btn" onClick={handleRegisterPasskey} disabled={busy}>
               Register with passkey
             </button>
-            <button className="btn" onClick={handleAuthenticate} disabled={busy}>
-              Sign in with passkey
-            </button>
           </div>
 
-          <h2>Wallet binding</h2>
+          <h2>2. Identity</h2>
           <div className="stack">
             <button className="btn" onClick={handleConnectWallet} disabled={busy}>
-              {wallet ? `Connected: ${wallet.slice(0, 6)}…${wallet.slice(-4)}` : "Connect wallet"}
+              {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
             </button>
-            <label className="field">
-              Domain
-              <input value={domain} onChange={(e) => setDomain(e.target.value)} disabled={busy} />
-            </label>
-            <button className="btn" onClick={handleBindWallet} disabled={busy || !wallet}>
-              Bind wallet to passkey
+            <button className="btn" onClick={handleRegisterIdentity} disabled={busy || !account}>
+              Sign identity message and register (passkey-gated)
             </button>
           </div>
 
-          <h2>Prove membership</h2>
+          <h2>Test a proof</h2>
           <p>
-            Uses <code>@judges/sdk</code> rather than a direct fetch, and proves through the WebAuthn ceremony above.
-            It needs a connected wallet: proofs are bound to one wallet, so they cannot be lifted and reused.
+            Generate a membership proof in your browser for an app id. It doesn&apos;t submit anything — the three
+            demos below do. Needs the identity registered and its root posted on-chain.
           </p>
           <div className="stack">
-            <button className="btn" onClick={handleProveMembership} disabled={busy || !wallet}>
-              Prove membership (ZK) via SDK
+            <label className="field">
+              App id
+              <input value={domain} onChange={(e) => setDomain(e.target.value)} disabled={busy} />
+            </label>
+            <button className="btn" onClick={handleTestProve} disabled={busy || !account}>
+              Generate a proof (ZK, in-browser)
             </button>
           </div>
 
           <h2>Demo integrations</h2>
-          <p>Three apps, one SDK, three separate nullifier domains. Acting in one does not spend your turn in another.</p>
+          <p>Three apps, one flow, three separate nullifier domains. Acting in one does not spend your turn in another.</p>
           <ul className="prose-list">
             <li>
-              <a href="/demo/dao">Sybil-resistant DAO</a>: one credential, one vote per proposal.
+              <a href="/demo/dao">Sybil-resistant DAO</a>: one identity, one vote per proposal.
             </li>
             <li>
-              <a href="/demo/agent">AI agent registry</a>: agents registered only under a verified credential.
+              <a href="/demo/agent">AI agent registry</a>: agents registered only under a verified identity.
             </li>
             <li>
-              <a href="/demo/faucet">Sybil-resistant faucet</a>: one claim per credential.
+              <a href="/demo/faucet">Sybil-resistant faucet</a>: one claim per identity.
             </li>
           </ul>
 

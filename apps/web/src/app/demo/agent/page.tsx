@@ -40,7 +40,7 @@ export default function AgentDemoPage() {
             address: addresses.agentRegistry!,
             abi: agentRegistryAbi,
             functionName: "registerAgent",
-            args: [name, proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet],
+            args: [name, proof.proof, proof.merkleRoot, proof.nullifier, proof.wallet],
             account,
             chain: walletClient.chain,
           }),

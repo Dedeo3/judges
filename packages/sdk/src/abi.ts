@@ -6,7 +6,7 @@ export const judgesVerifierAbi = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "proof", type: "bytes" },
-      { name: "walletCommitment", type: "bytes32" },
+      { name: "merkleRoot", type: "bytes32" },
       { name: "domain", type: "bytes32" },
       { name: "nullifier", type: "bytes32" },
       { name: "contextHash", type: "bytes32" },

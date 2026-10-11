@@ -12,8 +12,14 @@ pragma solidity ^0.8.26;
 ///           `sha256(contextHash ‖ wallet) % FIELD_PRIME`, which is what binds a proof to one
 ///           wallet and one action (README §7.2). Passing `policyHash` directly would let a
 ///           caller assert any binding they like, defeating the purpose.
+///        3. Redesign B: the proof commits to a Merkle `merkleRoot` (LeanIMT of identity
+///           commitments) rather than a bare `walletCommitment`. `verify` rejects any root the
+///           CommitmentTree hasn't published, which is what makes membership — not just
+///           knowledge of some secret — the on-chain soundness check.
 interface IJudgesVerifier {
     /// @param proof ABI-encoded (uint256[2] pA, uint256[2][2] pB, uint256[2] pC).
+    /// @param merkleRoot The membership-tree root the proof was generated against. Must be a root
+    ///        the CommitmentTree has published, or `verify` reverts with `UnknownRoot`.
     /// @param contextHash App-defined action binding — a DAO folds in (proposalId, support), a
     ///        faucet its claim tag. The consumer recomputes this from its own call arguments, so
     ///        a stolen proof can't be redirected to a different action.
@@ -21,7 +27,7 @@ interface IJudgesVerifier {
     ///        address, not `msg.sender`, since it is the address cryptographically bound in.
     function verify(
         bytes calldata proof,
-        bytes32 walletCommitment,
+        bytes32 merkleRoot,
         bytes32 domain,
         bytes32 nullifier,
         bytes32 contextHash,

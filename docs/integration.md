@@ -24,8 +24,8 @@ your site                         Judges origin (popup)
 ─────────                         ─────────────────────
 judges.prove()  ── window.open ─▶ /connect
                                     shows who's asking, which wallet, which app
-                                    passkey ceremony (Touch ID / Windows Hello / phone)
-                                    /api/prove → ZK proof
+                                    passkey + wallet signature (identity)
+                                    ZK proof generated in the browser
                 ◀─ postMessage ──  proof only, to your exact origin
 judges.verify() ─▶ JudgesVerifier on Monad
 ```
@@ -109,7 +109,7 @@ const contextHash = await publicClient.readContract({
 
 const proof = await judges.prove({ assurance: "user_verified", wallet: account, contextHash });
 
-await daoContract.write.vote([proposalId, support, proof.proof, proof.walletCommitment, proof.nullifier, proof.wallet]);
+await daoContract.write.vote([proposalId, support, proof.proof, proof.merkleRoot, proof.nullifier, proof.wallet]);
 ```
 
 `contracts/src/demos/` has three worked examples: DAO voting, an AI agent registry, and a faucet.
@@ -152,7 +152,7 @@ plain `Error` naming the field. Treat that as an integration bug, not a user err
 
 - The popup handshake and its security checks (origin, window, request id)
 - The WebAuthn ceremony (`@simplewebauthn/browser`)
-- Server-side credential-secret derivation and ZK proof generation
+- Client-side identity-secret derivation (from a wallet signature) and in-browser ZK proof generation
 - The wallet/action binding (`policyHash = sha256(contextHash ‖ wallet) mod FIELD_PRIME`)
 - ABI encoding of the Groth16 proof
 - Normalising the on-chain result into `{ valid, txHash, domain, nullifier }`

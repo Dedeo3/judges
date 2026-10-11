@@ -31,12 +31,12 @@ contract SybilResistantFaucet {
     /// @param wallet The wallet the proof is bound to. Funds go *here*, not to `msg.sender` —
     ///        so a third party submitting someone else's proof just pays gas to deliver that
     ///        person their own claim.
-    function claim(bytes calldata proof, bytes32 walletCommitment, bytes32 nullifier, address wallet) external {
+    function claim(bytes calldata proof, bytes32 merkleRoot, bytes32 nullifier, address wallet) external {
         if (address(this).balance < claimAmount) revert InsufficientFaucetBalance();
 
         // Consumes the nullifier before any transfer, so a reentrant claim hits
         // NullifierAlreadyUsed rather than draining the faucet.
-        judges.verify(proof, walletCommitment, domain, nullifier, contextHashFor(), wallet);
+        judges.verify(proof, merkleRoot, domain, nullifier, contextHashFor(), wallet);
 
         (bool ok,) = payable(wallet).call{value: claimAmount}("");
         if (!ok) revert TransferFailed();
