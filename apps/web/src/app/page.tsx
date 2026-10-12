@@ -299,7 +299,7 @@ export default async function Home() {
           <li>
             <span className="label muted">Docket 1</span>
             <h3>DAO vote</h3>
-            <p>One credential, one vote per proposal. A second vote reverts with NullifierAlreadyUsed.</p>
+            <p>One credential, one vote. A second vote reverts with NullifierAlreadyUsed, whichever proposal it is for.</p>
             {docket.dao && (
               <p className="mono muted state" style={{ fontSize: "0.8125rem" }}>
                 {docket.dao.proposals === 0

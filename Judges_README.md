@@ -923,7 +923,7 @@ Pages as shipped:
   register a passkey, bind a wallet, prove membership via the SDK
 
 /demo/dao
-  one credential, one vote per proposal
+  one credential, one vote (the nullifier covers the whole DAO, not each proposal)
 
 /demo/agent
   register an AI agent only under a verified credential

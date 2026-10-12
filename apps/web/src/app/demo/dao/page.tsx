@@ -18,8 +18,12 @@ export default function DaoDemoPage() {
       intro={
         <>
           <p>
-            One verified credential, one vote per proposal. The contract keeps no per-voter records at all — the
-            second vote from the same passkey simply reverts with <code>NullifierAlreadyUsed</code>.
+            One verified credential, one vote. The contract keeps no per-voter records at all — a second vote from
+            the same credential simply reverts with <code>NullifierAlreadyUsed</code>.
+          </p>
+          <p>
+            The nullifier is scoped to the app, so in this demo that is one vote across the whole DAO, not one per
+            proposal. A DAO that wants a vote on every proposal would give each proposal its own domain.
           </p>
           <p>
             The proof is bound to both your wallet <em>and</em> your vote direction, so nobody can lift it from the

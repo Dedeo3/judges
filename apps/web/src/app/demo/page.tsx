@@ -184,7 +184,7 @@ export default function DemoPage() {
           <p>Three apps, one flow, three separate nullifier domains. Acting in one does not spend your turn in another.</p>
           <ul className="prose-list">
             <li>
-              <a href="/demo/dao">Sybil-resistant DAO</a>: one identity, one vote per proposal.
+              <a href="/demo/dao">Sybil-resistant DAO</a>: one identity, one vote.
             </li>
             <li>
               <a href="/demo/agent">AI agent registry</a>: agents registered only under a verified identity.

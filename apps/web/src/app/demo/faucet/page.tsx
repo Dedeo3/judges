@@ -14,7 +14,7 @@ export default function FaucetDemoPage() {
       intro={
         <>
           <p>
-            One claim per verified credential. Claim once and it works; claim again with the same passkey and it
+            One claim per verified credential. Claim once and it works; claim again with the same credential and it
             reverts with <code>NullifierAlreadyUsed</code> — no wallet-address heuristics, no per-claim bookkeeping.
           </p>
           <p>
