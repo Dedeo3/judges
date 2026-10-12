@@ -1,6 +1,7 @@
 import { CheckIcon, KeyIcon, LockKeyIcon, StampIcon } from "@phosphor-icons/react";
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { colors, fonts } from "../theme";
+import { type Cue, captions } from "../voiceover";
 import { CLAMP, Caption, HeaderStrip, RedactBar, Stage, Stamp, pop } from "./stage";
 
 const SPACING = 1300;
@@ -10,6 +11,19 @@ const VIGNETTE_X = 240;
 const VIGNETTE_SCALE = 1.3;
 const TRACK_Y = 350;
 const EASE = { ...CLAMP, easing: Easing.inOut(Easing.cubic) };
+
+/**
+ * Narration, in frames from the start of the scene. Each line starts as the camera leaves for
+ * its station (see `camX`), so the voice arrives with the picture.
+ */
+export const PROCEDURE_VOICE: Cue[] = [
+  { id: "procedure-1", at: 5 },
+  { id: "procedure-2", at: 80 },
+  { id: "procedure-3", at: 186 },
+  { id: "procedure-4", at: 284 },
+  { id: "procedure-5", at: OVERVIEW_AT + 10 },
+];
+const PROCEDURE_CAPTIONS = captions(PROCEDURE_VOICE);
 
 // Notes are the sub-lines of the landing page's §3 Procedure diagram (apps/web/src/app/page.tsx).
 const STATIONS = [
@@ -41,15 +55,7 @@ export function Procedure() {
       overlay={
         <>
           <HeaderStrip tone="paper" right="§ 3 — Procedure" />
-          <Caption
-            lines={[
-              { from: 4, text: "A passkey lives on your device. Biometric or PIN unlocks it." },
-              { from: 94, text: "It yields a zero-knowledge proof: a member of the set, not which one." },
-              { from: 184, text: "JudgesVerifier on Monad checks it and consumes a nullifier." },
-              { from: 274, text: "One credential, one action. Accepted." },
-              { from: OVERVIEW_AT + 8, text: "Four steps. Nothing else disclosed." },
-            ]}
-          />
+          <Caption lines={PROCEDURE_CAPTIONS} />
         </>
       }
     >

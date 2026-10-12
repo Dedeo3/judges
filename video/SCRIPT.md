@@ -3,29 +3,35 @@
 Working doc for both submission videos. Read this before changing a scene; update it when a
 scene changes.
 
-Status: scenes 1–3 of `JudgesDemo` (title, problem, mechanism — the first 28 seconds) are built
-in the "case file" style described in §2. Everything after them is still a placeholder.
+Status: `JudgesDemo` is complete at 2:23.5 — animated opening, real recordings of the three
+demo apps, narration, music and effects. `JudgesPitch` is still a scaffold (§5).
 
 ## 1. Ground rules
 
-Two rounds of feedback shaped these. Round one: the scaffold was "full of text" and boring.
-Round two: small centred icons on a flat background were "still too monoton".
+Two rounds of feedback shaped the pictures. Round one: the scaffold was "full of text" and
+boring. Round two: small centred icons on a flat background were "still too monoton". A third
+asked for a voice that explains the app like a person would, and music so the viewer does not
+drift.
 
 - **A different kind of picture every 4–5 seconds.** Never two beats in a row with the same
-  composition. Title sheet → node graph and swarm → form being redacted → device → tree →
-  ledger → stamp is the current run.
-- **The subject fills the frame.** Aim for 50–70% of the frame. A 64px icon in a 1920px frame
-  reads as empty no matter how well it is animated.
-- **Motion carries the meaning; text labels it.** One statement per beat, six words or fewer,
-  with at most one word in the accent colour.
+  composition.
+- **The subject fills the frame.** Aim for 50–70% of the frame.
+- **Motion carries the meaning; text labels it.** One statement per beat, with at most one
+  word in the accent colour.
 - **Physical motion, not fades.** Things drop, slam, wipe, draw themselves and settle with
-  overshoot (`spring()`), and the stage is always drifting (slow push-in or a camera pan).
+  overshoot (`spring()`).
 - **Depth, not flat fills.** Lit background, vignette, film grain, shadows under anything that
   sits on the page.
-- **Captions run along the bottom**, lighting up word by word. They are the narration; if a
-  voice-over is recorded, they are its script.
+- **Captions are the narration, word for word,** lighting up as each word is spoken. Someone
+  watching muted loses nothing.
 - **Real footage beats animation** wherever the real `/demo` flow can show it. Animation is for
   what has no UI: the problem, the Merkle tree, the verifier.
+- **Get to the working product early, and make it most of the video.** The recordings start
+  at 0:28 and run to 2:10, which is 71% of the video; the three demo apps alone are 62 seconds.
+- **Show it failing on purpose.** The rejected second attempt is the product, so it is on
+  screen three times: animated, on the faucet, on the DAO.
+- **Say when a wait was shortened.** A chip shows the speed whenever a recording runs faster
+  than it happened.
 
 ## 2. Visual language: the case file
 
@@ -40,7 +46,8 @@ The video takes that literally and turns it into objects:
 | Marker redaction bars | "Nothing else disclosed" | privacy, shown instead of stated |
 | Rubber stamps (FILED, ACCEPTED, REJECTED) | the Verdict component | the on-chain result |
 | Seal with ring text and a § | the site's section mark | authority; a quiet moving detail |
-| Exhibit A / Exhibit B / § 3 | the site's section numbering | each beat is a piece of evidence |
+| Exhibit A … F, § 1, § 2, § 5 | the site's section numbering | each beat is a piece of evidence |
+| Slips pinned over a recording | the site's margin notes | the one fact to take from this step |
 
 **Kept out, as on the site** (`DESIGN-FE.md` §6): fingerprints, faces and eyes, because they
 suggest biometrics are being collected, and gavels, scales and courthouse pillars. So user
@@ -50,40 +57,121 @@ in beat 2b, which is the practice being argued against and ends up redacted.
 
 Palette and type are the site's: paper `#F1EDE4`, ink `#15130F`, Newsreader and IBM Plex Mono.
 Red still means one thing only — something that is or should be rejected (sybil wallets, leaked
-data, the second attempt). On the ink scenes red is lifted to `#E2483C` so it stays legible.
+data, the second attempt, a stated limit). On the ink scenes red is lifted to `#E2483C`.
 
-Icons are Phosphor (`@phosphor-icons/react`, MIT). Shared pieces live in `src/scenes/stage.tsx`:
-`Stage`, `HeaderStrip`, `Caption`, `Stamp`, `RedactBar`, `Rise`, `pop`.
+Icons are Phosphor (`@phosphor-icons/react`, MIT). Shared pieces live in `src/scenes/stage.tsx`
+(`Stage`, `HeaderStrip`, `Caption`, `Stamp`, `RedactBar`, `Rise`, `pop`) and
+`src/scenes/exhibit.tsx` (`Exhibit`, `Note`, `Mark`, `Click`, `Speed`).
 
-## 3. JudgesDemo (cap 3:00)
+### How the recordings are framed
+
+The recordings are display captures: browser chrome and a bookmarks bar on top, the page below,
+the wallet's windows over the right edge. They are never shown whole.
+
+- The **page** is cropped out and laid on the desk as a sheet, the same sheet as the title.
+  Because the site is paper-coloured, the crop reads as a printed page rather than a browser.
+- When the wallet asks for something, its window is cropped out as a **second sheet** that
+  slides in beside the page, and slides away when it closes.
+- A **camera** moves over the page: wide to establish, in on the button being pressed, in on
+  the result. Clicks leave a ring.
+- **Waits are shortened**, never cut out, and the speed is shown.
+- The wallet shows the account's nickname ("Seed Phrase 2 #1"). It is only a label, but on
+  screen it reads like a secret, so it is covered. The address is left visible.
+
+## 3. JudgesDemo (2:23.5, cap 3:00)
 
 Audience: hackathon judges who have never seen the product. It has to answer "what is this and
-does it work" mostly through pictures and footage.
+does it work".
 
-| # | Beat | Length | What happens | Statement on screen |
-|---|------|--------|--------------|---------------------|
-| 1 | Title | 3s | Cover sheet drops onto a desk; wordmark rises letter by letter; rule draws; three redaction bars wipe in; seal draws itself; FILED stamp slams and shakes the sheet | "Judges" · "A wallet, backed by a passkey." · "Nothing else disclosed." |
-| 2a | Problem — sybil (ink) | 5s | One person fans out into five wallets while a vote counter ticks up in red; camera pulls back and the frame floods with wallet dots as the counter runs to 5,000 | "One person, five votes?" |
-| 2b | Problem — privacy (paper) | 5s | A KYC form is scanned, its fields fly into "what the verifier keeps", then every field is redacted, the verifier's copy disappears and the form is stamped | "Prove you're real. Not who you are." |
-| 3 | Mechanism | 15s | Camera travels a track of four stations, 3s each: phone holding a key while a PIN is entered → Merkle path lighting up, leaves redacted, proof chip appears → proof drops into a block, nullifier typed and marked consumed → a stamp presses down and leaves ACCEPTED, second attempt REJECTED. Ends on all four side by side | "Passkey" "Proof" "Chain" "Verdict" |
-| 4 | Real demo footage A | ~45–60s | Screen recording: register passkey, connect wallet (Privy), generate proof, verify on-chain | lower-third captions only |
-| 5 | Real demo footage B | ~20–30s | Screen recording: same credential tries again → rejected | caption, then verdict stamp |
-| 6 | Verdict (accepted) | 3s | Stamp | "ACCEPTED" |
-| 7 | Verdict (rejected) | 3s | Stamp | "REJECTED — nullifier already used" |
-| 8 | Outro | 5s | Logo, repo URL, chain id | "github.com/Dedeo3/judges" |
+| # | Scene | Starts | Length | What happens |
+|---|-------|--------|--------|--------------|
+| 1 | Title | 0:00 | 3s | Cover sheet drops onto a desk; wordmark rises; redaction bars; seal; FILED stamp |
+| 2a | Problem — sybil (ink) | 0:03 | 5s | One person fans out into five wallets, a vote counter runs to 5,000, the frame floods |
+| 2b | Problem — privacy (paper) | 0:08 | 5s | A KYC form is scanned, its fields leak to the verifier, then everything is redacted and stamped |
+| 3 | Mechanism | 0:13 | 15s | Camera travels four stations: passkey → proof → chain → verdict, then all four side by side |
+| 4 | Exhibit C — live | 0:28 | 7.5s | The landing page loads with a real verdict in its panel; zoom on the transaction hash |
+| 5 | Registration | 0:35.5 | 4.5s | The registration page, with the two steps marked. Done off camera, and the slide says so |
+| 6 | Exhibit D — faucet | 0:40 | 34s | Connect, ask, sign, prove, submit, **ACCEPTED** at 1:02; same credential again, **REJECTED** at 1:10 |
+| 7 | Exhibit E — DAO | 1:14 | 18s | The same flow at about 2×; ACCEPTED at 1:26, second vote REJECTED at 1:30 |
+| 8 | Exhibit F — agent registry | 1:32 | 10s | The same flow at about 2×; ACCEPTED at 1:40 |
+| 9 | Developers | 1:42 | 4s | The SDK usage, `prove` and `verify` marked |
+| 10 | § 2 Evidence | 1:46 | 15s | The gas table: the cheap path, why it was not taken, what the proof costs |
+| 11 | § 1 Holding, § 5 Dissent | 2:01 | 9s | The site's own statement of what a passkey does not prove |
+| 12 | Holding | 2:10 | 7s | What it does prove, three redaction bars, "Nothing else disclosed" stamp |
+| 13 | Outro | 2:17 | 6.5s | Title sheet again, with the site and repository typed onto it; FILED |
 
-Total ~110–130s, leaving headroom under the cap for footage that runs long.
+Running order and lengths are code: `src/timeline.ts`.
 
-Captions as built (edit them in each scene's `<Caption lines={…}>`):
+### Narration
 
-- 2a: "A wallet costs nothing to make." → "So one person can vote five times — or five thousand."
-- 2b: "The usual fix: hand over who you are." → "Judges takes a proof instead."
-- 3: "A passkey lives on your device. Biometric or PIN unlocks it." → "It yields a
-  zero-knowledge proof: a member of the set, not which one." → "JudgesVerifier on Monad checks
-  it and consumes a nullifier." → "One credential, one action. Accepted." → "Four steps. Nothing
-  else disclosed."
+The text is `src/voiceover/script.json`; that file is the source, this is a reading copy.
 
-## 4. JudgesPitch (cap 2:00)
+> A wallet costs nothing to make. One person can cast five thousand votes. The usual fix? Hand
+> over your identity. Judges takes a proof instead.
+>
+> Your passkey stays on your device. A zero-knowledge proof says you're a member, not which
+> one. Monad checks it and spends a nullifier. One credential, one action. Four steps. Nothing
+> else disclosed.
+>
+> That's the idea. Here it is, running on Monad testnet. This verdict is read from a real
+> transaction. You register once: a passkey prompt, then one wallet signature.
+>
+> First app: a faucet that pays once per credential. I connect a wallet. I ask to claim, and
+> the wallet signs one message. That signature becomes my secret. It never leaves this browser.
+> The proof is built right here. No server learns who I am. Then it goes to Monad. The contract
+> checks the proof and marks my nullifier as spent. Accepted. Now the same credential tries
+> again. Same secret, same app, same nullifier. Rejected. And nothing was even sent.
+>
+> Second app: a DAO. Same identity, different app, so a fresh nullifier. One credential, one
+> vote. The proof is bound to my choice, so nobody can copy it and flip it. Counted. A second
+> vote? Rejected.
+>
+> Third: a registry for AI agents. An agent is recorded only when a verified credential stands
+> behind it. No identity is stored.
+>
+> For a developer, it's two calls: prove, then verify. The hard choice was cost. Checking a
+> passkey directly on chain is about thirteen times cheaper. But your public key would follow
+> you into every app. So Judges pays for the proof: about 1.1 million gas on Monad.
+>
+> What it does not prove is one person, one credential. Someone can still register twice.
+> Judges says so in its own dissent. What it does prove: a user-verified passkey stood behind
+> this wallet. Nothing else disclosed.
+>
+> Judges. Open source, and live on Monad testnet.
+
+Voice: ElevenLabs, "Daniel" (built-in), `eleven_multilingual_v2`, speed 1.15. Short samples of
+three other built-in voices are in `out/voice-samples/` after
+`pnpm --filter @judges/video voice -- --samples`.
+
+The evidence passage is there on purpose. The usual advice for a judged demo is to name the
+hardest engineering decision while the product is on screen; for Judges that is paying about
+1.13M gas for a proof when an on-chain passkey check costs about 88,000.
+
+## 4. Sound
+
+**Music.** "Your Breath" by Eugenio Mininni, from Mixkit. Chosen by measurement, since it was
+picked without being able to listen: twelve candidates were downloaded and analysed for tempo,
+loudness and structure.
+
+- It is exactly **120 BPM**, so a beat is half a second, 15 frames. Every cut in the opening
+  (0:03, 0:08, 0:13, 0:16 …) was already on a half second, so the picture lands on the beat
+  without moving anything.
+- Its own structure matches the video's: a quiet intro under the title and problem, drums in at
+  0:16 as the camera reaches the second station, a fuller section from 0:28 where the live demo
+  starts, a breakdown at 1:20–1:28 and a second chorus at 1:30.
+- The verdict stamps are placed on bar lines: 1:02 and 1:10 (faucet), 1:26 and 1:30 (DAO, the
+  last on the downbeat of the second chorus), 1:40 (agent), 2:21 (closing FILED).
+
+**Mix.** The finished file is at -16 LUFS. Music sits 15 dB under the narration while someone
+is speaking, 7 dB higher in the gaps, and a little more before the first line and after the last. The
+track's sections differ by about 10 dB as recorded, so `scripts/audio-assets.mjs` evens them
+out first. `scripts/finish.mjs` sets the final loudness.
+
+**Effects.** Stamp, paper, marker, click, tick and whoosh, from Mixkit sounds; the stamp is a
+wooden hit, a typewriter strike and a low sine layered. They mark what the picture already
+does: a sheet landing, a redaction bar, a click, a verdict.
+
+## 5. JudgesPitch (cap 2:00)
 
 Audience: judges deciding whether to advance the project. Problem → solution → why now → ask.
 
@@ -92,69 +180,100 @@ Audience: judges deciding whether to advance the project. Problem → solution �
 | 1 | Title | 3s | Same as demo | "Judges" |
 | 2 | Problem | 10s | Same two beats as demo | as demo |
 | 3 | Solution in one shot | 10s | Mechanism scene, cut down, or its closing four-panel frame | "Passkey. Proof. No identity leak." |
-| 4 | Why Monad / why now | 10s | TBD | TBD |
+| 4 | Why Monad / why now | 10s | TBD — the evidence scene from the demo is a start | TBD |
 | 5 | Traction / status | 10s | TBD | TBD |
 | 6 | Ask | 8s | TBD | TBD |
 | 7 | Outro | 5s | Same as demo | repo + chain id |
 
 Rows 4–6 wait on the market doc (`STATUS.md` item F). That is a content gap, not a design one.
-Row 3 is not wired into `JudgesPitch.tsx` yet.
+Nothing past row 2 is wired into `JudgesPitch.tsx` yet, and it has no narration.
 
-## 5. References
+## 6. References
 
-Looked at through the user's own browser with `browser-harness`. Reference only — nothing was
-downloaded from these; every asset in the video is drawn in code or comes from an MIT icon set.
+Looked at through the user's own browser with `browser-harness`, or by web search. Reference
+only: nothing in the video is copied from these.
 
-**A friend's Remotion video (product "luora", 2:42).** The quality bar. What it does: an
-illustrated scene to open, then a dot-grid statistic, a wall of flooding text, a gauge card, a
-terminal, long product-UI passages with camera moves and callouts, a flow diagram converging on
-the logo, and a typed URL to close. A new kind of visual every few seconds, subjects that fill
-the frame, glow and depth, and a karaoke caption line throughout. Its dot-grid statistic is the
-direct ancestor of our wallet flood.
+**A friend's Remotion video (product "luora", 2:42).** The quality bar. A new kind of visual
+every few seconds, subjects that fill the frame, glow and depth, a karaoke caption line
+throughout, and long product-UI passages with camera moves and callouts, which is the model
+for the exhibit scenes.
 
-**The live site.** Source of the header strip, the "Opinion" margin note, § numbering, the
-attempt ledger and the claim line.
+**The live site.** Source of the header strip, the margin notes, § numbering, the attempt
+ledger and the claim line.
 
 **Pinterest, "redacted document graphic design".** Classified-file layouts: marker bars over
-typed fields, rotated rubber stamps, seals, photo boxes, a sheet lit on a dark surface. This is
-where the case-file treatment came from.
+typed fields, rotated rubber stamps, seals, a sheet lit on a dark surface. Where the case-file
+treatment came from.
 
 **Pinterest, "fingerprint biometric scan".** Looked at for the passkey station and then not
-used: the first build had a fingerprint under a scan line, which the site's design brief rules
-out (see §2), so the station shows a PIN instead.
+used: the site's design brief rules it out (§2).
 
-**Pinterest, "motion graphics video", and prompt-motion.com** (first pass). One statement per
-beat in large type, physical object motion, shape-driven transitions, duotone plus one accent.
+**Pinterest, "motion graphics video", and prompt-motion.com.** One statement per beat in large
+type, physical object motion, duotone plus one accent.
 
-## 6. Claims check
+**Hackathon demo advice** (reskilll.com, tips.hackathon.com, angelhack.com, the Builderbase
+judging-rubric notes). A hook of about 20 seconds on the problem, then the working product,
+which should be about half the runtime; show the first screen, the core action and the result;
+show a failure being handled; name the hardest engineering decision while the interface is on
+screen; no code editor or terminal on screen.
 
-The landing page is careful, and the video should not promise more than it does. Its Holding
+**Screen-recording editors** (Screen Studio, Tella, Open Screen, TechSmith's editing guide).
+Zoom to where the click happens and start the move before the click; trim dead air; add
+callouts only where they help someone follow.
+
+**Mixing guides** (vidpros.com, voxbooster.com, openclip.app, a BBC/Salford loudness study).
+They disagree on numbers. What they agree on: set the voice first, keep music well under it
+while someone speaks, let it come up in the gaps, and aim for about -16 to -14 LUFS overall.
+
+## 7. Claims check
+
+The landing page is careful, and the video does not promise more than it does. Its Holding
 section says a passkey does not prove one credential = one human, and its Dissent says one
-person can still hold several identities.
+person can still hold several identities. The video now says both out loud (scene 11).
 
-- Safe, and used: "a wallet, backed by a passkey that passed user verification", "nothing else
-  disclosed", "one credential, one action per application", "consumes a nullifier".
-- **Open question:** beat 2a asks "One person, five votes?". Judges stops one *credential*
-  voting twice; it does not stop one person registering five passkeys. A judge who reads the
-  Dissent may notice. Options: keep it as a statement of the problem and let the demo footage
-  say "one credential, one vote"; or change the line to "One wallet. Whose is it?". Not changed
-  yet — this wording was chosen by the team.
+Every figure in the narration and on the notes, and where it comes from:
 
-## 7. Status
+| Claim | Source |
+|---|---|
+| "pays once per credential", 0.01 MON | `SybilResistantFaucet.claimAmount()` read from the deployed contract |
+| "That signature becomes my secret. It never leaves this browser." | `/demo` page text; the wallet prompt itself says the same |
+| "marks my nullifier as spent"; `Poseidon(secret, app, epoch)` | `NullifierRegistry`, circuit |
+| "Rejected. And nothing was even sent." | the page reads `isNullifierUsed` before submitting; no wallet prompt appears in the recording |
+| "The proof is bound to my choice" | `/demo/dao` page text; `contextHashFor(proposalId, support)` |
+| "No identity is stored" (agent registry) | `/demo/agent` page text |
+| "about thirteen times cheaper" | landing page §2: ~88,000 gas against ~1,130,000 |
+| "your public key would follow you into every app" | landing page §2, the P256VERIFY paragraph |
+| "about 1.1 million gas on Monad" | landing page §2 and §5 |
+| "This verdict is read from a real transaction" | the Verdict panel reads `NEXT_PUBLIC_JUDGES_SAMPLE_TX`, set to the faucet claim in the recording |
+
+Things the video is careful about:
+
+- **"One person, five votes?"** stays as the statement of the problem in beat 2a. Judges stops
+  one *credential* acting twice; the narration says "one credential" every time it describes the
+  product, and scene 11 says plainly that someone can register twice.
+- **Different app, different nullifier** is said about the nullifier only. The wallet address is
+  the same in both apps and visible on chain, so the video does not claim the two actions are
+  unlinkable.
+- **"live on Monad testnet"** is true of the contracts. The recordings were made on `localhost`
+  against those contracts, and the end card says so.
+- **Registration is not shown live.** It was done before recording, and the slide over that
+  scene says "Done before recording".
+- **Speed.** The DAO and agent scenes run at about 2×, the faucet at up to 1.5×, each labelled
+  on screen. The proof took about four seconds in the faucet take.
+
+## 8. Status
 
 Done:
 
-- Scenes 1–3 rebuilt as above and re-timed in `JudgesDemo.tsx` (3s / 10s / 15s);
-  `JudgesPitch.tsx` re-timed to match for the two scenes it shares.
-- `Verdict` and `Outro` now share the lit background and grain, but are otherwise unchanged.
-- `src/dev/` contact sheet for checking a scene at several frames in one still (see README).
+- All thirteen scenes of `JudgesDemo`, with narration, captions timed to the voice, music and
+  effects, and a loudness pass.
+- `src/dev/` contact sheet for checking any scene, or the whole video, at several frames.
 
 Open:
 
-- Record `/demo` and drop the footage into `public/` (rows 4–5). This needs an identity
-  registered and a root posted on-chain first.
-- `Verdict` (rows 6–7) and `Outro` are still plain cards. Once real footage is in, the verdict
-  can probably be the footage itself with a stamp over it.
-- Pitch rows 3–6.
-- Voice-over or music. The captions carry the narration for now; nothing is audible yet.
-- Decide the wording in §6.
+- `JudgesPitch` rows 3–6, and its narration.
+- The voice and the music were chosen without being heard. Someone should listen to the
+  render and to `out/voice-samples/`, and swap either if it sounds wrong; both are one-line
+  changes (README, "Narration" and "Assets").
+- The live site cannot register passkeys until `RP_ID` and `RP_ORIGIN` are set on Vercel. The
+  end card shows its address, so that has to be fixed before the video is submitted.

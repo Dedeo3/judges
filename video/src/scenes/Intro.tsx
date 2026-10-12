@@ -150,7 +150,7 @@ export function Intro() {
   );
 }
 
-function Seal() {
+export function Seal() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const draw = interpolate(frame, [36, 62], [0, 1], { ...CLAMP, easing: Easing.inOut(Easing.cubic) });

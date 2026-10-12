@@ -4,6 +4,11 @@ This is the screen recording that goes into `JudgesDemo` after the animated open
 onward). Read sections 1 and 2 before touching the record button: two facts about how the
 protocol works decide how you have to plan the takes.
 
+The takes in the current video were recorded on 2026-10-12 on `localhost`, with the faucet,
+DAO and agent flows each as one continuous file (accepted, then rejected). The scenes address
+those files by the second and by pixel, so if you record again, keep the same window size and
+zoom, and expect to re-check the numbers in `src/scenes/Claims.tsx` and `src/scenes/Site.tsx`.
+
 ## 1. Two things to know first
 
 **Every on-chain action works once per identity, per app.** The nullifier is
@@ -167,12 +172,14 @@ The wallet address and transaction hashes are public and fine to show.
 
 ## 7. Afterwards
 
-1. Name the files `01-faucet-accepted.mp4`, `02-faucet-rejected.mp4`, `03-dao.mp4`,
-   `04-register.mp4`, `05-site.mp4` and put them in `video/public/footage/`.
-2. Tell me which clips you recorded and anything that looked different from what is written
-   here. I will trim them, shorten the waits and place them after the opening.
-3. Raw screen recordings are large. Do not commit them until we have decided whether they
-   belong in the repository.
+1. Put the files in `video/public/` under the names the scenes load: `A2-landing.mp4` (site
+   walkthrough), `B-faucet-accepted-rejected.mp4`, `C-dao-accepted-rejected.mp4`,
+   `D-agent-accepted.mp4`.
+2. Step through each new file and update the recording times and positions in
+   `src/scenes/Claims.tsx` and `src/scenes/Site.tsx`. The contact sheet (README, "Checking a
+   scene") shows quickly whether a shot still lines up.
+3. Raw screen recordings are large and are ignored by git (`video/.gitignore`). Keep your own
+   copy; the video cannot be rendered without them.
 
 ## 8. If something goes wrong
 

@@ -1,7 +1,20 @@
 import { DatabaseIcon, UserIcon, WalletIcon } from "@phosphor-icons/react";
 import { Easing, Sequence, interpolate, random, useCurrentFrame, useVideoConfig } from "remotion";
 import { colors, fonts } from "../theme";
+import { type Cue, captions } from "../voiceover";
 import { CLAMP, Caption, HeaderStrip, RedactBar, Rise, Stage, Stamp, pop } from "./stage";
+
+const BEAT_FRAMES = 150;
+
+/** Narration, in frames from the start of the scene. The two beats are 5s each. */
+export const PROBLEM_VOICE: Cue[] = [
+  { id: "problem-1", at: 5 },
+  { id: "problem-2", at: 70 },
+  { id: "problem-3", at: BEAT_FRAMES + 5 },
+  { id: "problem-4", at: BEAT_FRAMES + 88 },
+];
+const SYBIL_CAPTIONS = captions(PROBLEM_VOICE.slice(0, 2));
+const PRIVACY_CAPTIONS = captions(PROBLEM_VOICE.slice(2).map((cue) => ({ ...cue, at: cue.at - BEAT_FRAMES })));
 
 /**
  * Problem — 10s, two beats that look nothing alike so the eye resets between them.
@@ -9,13 +22,12 @@ import { CLAMP, Caption, HeaderStrip, RedactBar, Rise, Stage, Stamp, pop } from 
  * B (paper): a KYC form leaks its fields to a verifier, then gets redacted and stamped.
  */
 export function Problem() {
-  const { fps } = useVideoConfig();
   return (
     <>
-      <Sequence durationInFrames={fps * 5}>
+      <Sequence durationInFrames={BEAT_FRAMES}>
         <SybilBeat />
       </Sequence>
-      <Sequence from={fps * 5}>
+      <Sequence from={BEAT_FRAMES}>
         <PrivacyBeat />
       </Sequence>
     </>
@@ -76,12 +88,7 @@ function SybilBeat() {
       overlay={
         <>
           <HeaderStrip tone="ink" right="Exhibit A — The problem" />
-          <Caption
-            lines={[
-              { from: 6, text: "A wallet costs nothing to make." },
-              { from: 72, text: "So one person can vote five times — or five thousand." },
-            ]}
-          />
+          <Caption lines={SYBIL_CAPTIONS} />
         </>
       }
     >
@@ -263,12 +270,7 @@ function PrivacyBeat() {
       overlay={
         <>
           <HeaderStrip tone="paper" right="Exhibit B — The usual fix" />
-          <Caption
-            lines={[
-              { from: 4, text: "The usual fix: hand over who you are." },
-              { from: 82, text: "Judges takes a proof instead." },
-            ]}
-          />
+          <Caption lines={PRIVACY_CAPTIONS} />
         </>
       }
     >

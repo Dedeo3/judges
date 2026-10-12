@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "start": "remotion studio src/index.ts",
-    "build": "remotion render src/index.ts JudgesDemo out/judges-demo.mp4",
+    "build": "remotion render src/index.ts JudgesDemo out/judges-demo.raw.mp4 && node scripts/finish.mjs out/judges-demo.raw.mp4 out/judges-demo.mp4",
     "still": "remotion still src/index.ts JudgesDemo out/judges-demo.png",
     "contact": "remotion still src/dev/index.tsx Contact out/contact.png",
+    "voice": "node --env-file=.env scripts/voiceover.mjs",
+    "audio": "node scripts/audio-assets.mjs",
     "upgrade": "remotion upgrade"
   },
   "dependencies": {

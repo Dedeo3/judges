@@ -2,3 +2,10 @@ node_modules
 out
 .remotion
 *.log
+
+# Fetched or recorded, not ours to redistribute or too large: see README "Assets".
+.cache
+public/music
+public/sfx
+public/*.mp4
+public/*.mkv

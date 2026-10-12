@@ -1,11 +1,33 @@
+import type { ComponentType } from "react";
 import { AbsoluteFill, Freeze } from "remotion";
+import { JudgesDemo } from "../JudgesDemo";
+import { Agent, Dao, Faucet } from "../scenes/Claims";
+import { Holding } from "../scenes/Holding";
 import { Intro } from "../scenes/Intro";
+import { Outro } from "../scenes/Outro";
 import { Problem } from "../scenes/Problem";
 import { Procedure } from "../scenes/Procedure";
+import { Developers, Evidence, Limits, Live, Register } from "../scenes/Site";
 
-const SCENES = { intro: Intro, problem: Problem, procedure: Procedure };
+// `demo` is the whole video, so its frames are on the video's clock; the rest are one scene each.
+const SCENES: Record<string, ComponentType> = {
+  demo: JudgesDemo,
+  intro: Intro,
+  problem: Problem,
+  procedure: Procedure,
+  live: Live,
+  register: Register,
+  faucet: Faucet,
+  dao: Dao,
+  agent: Agent,
+  developers: Developers,
+  evidence: Evidence,
+  limits: Limits,
+  holding: Holding,
+  outro: Outro,
+};
 
-export type ContactProps = { scene: keyof typeof SCENES; frames: number[]; cols: number };
+export type ContactProps = { scene: string; frames: number[]; cols: number };
 
 /**
  * Review aid, not part of either video: one still showing a scene frozen at several frames, so
@@ -13,6 +35,7 @@ export type ContactProps = { scene: keyof typeof SCENES; frames: number[]; cols:
  */
 export function Contact({ scene, frames, cols }: ContactProps) {
   const Scene = SCENES[scene];
+  if (!Scene) throw new Error(`Unknown scene "${scene}". One of: ${Object.keys(SCENES).join(", ")}`);
   const scale = 1 / cols;
   return (
     <AbsoluteFill style={{ background: "#000" }}>

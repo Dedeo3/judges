@@ -1,11 +1,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { colors, fonts } from "../theme";
+import type { CaptionLine } from "../voiceover";
 
 /**
  * "Case file" building blocks shared by the motion scenes: a lit stage with film grain, the
  * site's own header strip, slam-in rubber stamps, marker redaction bars and a karaoke caption
- * line. See SCRIPT.md §5 for where this vocabulary comes from.
+ * line. See SCRIPT.md §2 for where this vocabulary comes from.
  */
 
 export type Tone = "paper" | "ink" | "desk";
@@ -117,9 +118,12 @@ export function HeaderStrip({ tone, right }: { tone: Tone; right: string }) {
   );
 }
 
-export type CaptionLine = { from: number; text: string };
+export type { CaptionLine };
 
-/** Subtitle line that lights up word by word — also the voice-over script if one gets recorded. */
+/**
+ * Subtitle line that lights up word by word. With narration the words follow the voice
+ * (`line.words`, measured from the audio); without it they run at `wordsPerSecond`.
+ */
 export function Caption({ lines, wordsPerSecond = 4.2 }: { lines: CaptionLine[]; wordsPerSecond?: number }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -128,10 +132,12 @@ export function Caption({ lines, wordsPerSecond = 4.2 }: { lines: CaptionLine[];
     if (frame >= line.from) active = line;
   }
   if (!active) return null;
+  if (active.until !== undefined && frame > active.until) return null;
 
   const local = frame - active.from;
   const perWord = fps / wordsPerSecond;
   const words = active.text.split(" ");
+  const leaving = active.until === undefined ? 1 : interpolate(frame, [active.until - 5, active.until], [1, 0], CLAMP);
 
   return (
     <div
@@ -143,11 +149,11 @@ export function Caption({ lines, wordsPerSecond = 4.2 }: { lines: CaptionLine[];
         textAlign: "center",
         fontFamily: fonts.mono,
         fontSize: 30,
-        opacity: interpolate(local, [0, 5], [0, 1], CLAMP),
+        opacity: Math.min(interpolate(local, [0, 5], [0, 1], CLAMP), leaving),
       }}
     >
       {words.map((word, i) => {
-        const spoken = local >= i * perWord;
+        const spoken = local >= (active.words?.[i] ?? i * perWord);
         return (
           <span key={i} style={{ opacity: spoken ? 1 : 0.34, fontWeight: spoken ? 500 : 400 }}>
             {word}

@@ -1,0 +1,45 @@
+{
+  "voice": { "id": "onwK4e9ZLuTAKqWW03F9", "name": "Daniel - Steady Broadcaster" },
+  "model": "eleven_multilingual_v2",
+  "settings": { "stability": 0.5, "similarity_boost": 0.75, "style": 0, "use_speaker_boost": true, "speed": 1.15 },
+  "lines": [
+    { "id": "problem-1", "text": "A wallet costs nothing to make." },
+    { "id": "problem-2", "text": "One person can cast five thousand votes." },
+    { "id": "problem-3", "text": "The usual fix? Hand over your identity." },
+    { "id": "problem-4", "text": "Judges takes a proof instead." },
+
+    { "id": "procedure-1", "text": "Your passkey stays on your device." },
+    { "id": "procedure-2", "text": "A zero-knowledge proof says you're a member, not which one." },
+    { "id": "procedure-3", "text": "Monad checks it and spends a nullifier." },
+    { "id": "procedure-4", "text": "One credential, one action." },
+    { "id": "procedure-5", "text": "Four steps. Nothing else disclosed." },
+
+    { "id": "live-1", "text": "That's the idea. Here it is, running on Monad testnet." },
+    { "id": "live-2", "text": "This verdict is read from a real transaction." },
+    { "id": "register-1", "text": "You register once: a passkey prompt, then one wallet signature." },
+
+    { "id": "faucet-1", "text": "First app: a faucet that pays once per credential. I connect a wallet." },
+    { "id": "faucet-2", "text": "I ask to claim, and the wallet signs one message. That signature becomes my secret. It never leaves this browser." },
+    { "id": "faucet-3", "text": "The proof is built right here. No server learns who I am." },
+    { "id": "faucet-4", "text": "Then it goes to Monad. The contract checks the proof and marks my nullifier as spent." },
+    { "id": "faucet-5", "text": "Accepted." },
+    { "id": "faucet-6", "text": "Now the same credential tries again. Same secret, same app, same nullifier." },
+    { "id": "faucet-7", "text": "Rejected. And nothing was even sent." },
+
+    { "id": "dao-1", "text": "Second app: a DAO. Same identity, different app, so a fresh nullifier.", "say": "Second app: a dow. Same identity, different app, so a fresh nullifier." },
+    { "id": "dao-2", "text": "One credential, one vote. The proof is bound to my choice, so nobody can copy it and flip it." },
+    { "id": "dao-3", "text": "Counted." },
+    { "id": "dao-4", "text": "A second vote? Rejected." },
+
+    { "id": "agent-1", "text": "Third: a registry for AI agents. An agent is recorded only when a verified credential stands behind it. No identity is stored." },
+
+    { "id": "dev-1", "text": "For a developer, it's two calls: prove, then verify." },
+    { "id": "evidence-1", "text": "The hard choice was cost. Checking a passkey directly on chain is about thirteen times cheaper. But your public key would follow you into every app." },
+    { "id": "evidence-2", "text": "So Judges pays for the proof: about 1.1 million gas on Monad." },
+
+    { "id": "limits-1", "text": "What it does not prove is one person, one credential. Someone can still register twice. Judges says so in its own dissent." },
+    { "id": "limits-2", "text": "What it does prove: a user-verified passkey stood behind this wallet. Nothing else disclosed." },
+
+    { "id": "outro-1", "text": "Judges. Open source, and live on Monad testnet." }
+  ]
+}

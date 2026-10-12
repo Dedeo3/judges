@@ -1,41 +1,48 @@
-import { Sequence, useVideoConfig } from "remotion";
+import type { ComponentType } from "react";
+import { Sequence } from "remotion";
+import { Soundtrack } from "./audio/Soundtrack";
+import { Agent, Dao, Faucet } from "./scenes/Claims";
+import { Holding } from "./scenes/Holding";
 import { Intro } from "./scenes/Intro";
 import { Outro } from "./scenes/Outro";
 import { Problem } from "./scenes/Problem";
 import { Procedure } from "./scenes/Procedure";
-import { Verdict } from "./scenes/Verdict";
+import { Developers, Evidence, Limits, Live, Register } from "./scenes/Site";
+import { DEMO, type SceneKey } from "./timeline";
+
+const SCENES: Record<SceneKey, ComponentType> = {
+  intro: Intro,
+  problem: Problem,
+  procedure: Procedure,
+  live: Live,
+  register: Register,
+  faucet: Faucet,
+  dao: Dao,
+  agent: Agent,
+  developers: Developers,
+  evidence: Evidence,
+  limits: Limits,
+  holding: Holding,
+  outro: Outro,
+};
 
 /**
- * Submission demo video (cap 3:00 — see Judges_README.md §final / STATUS.md). Intro, Problem and
- * Procedure are animated to exactly the lengths below (SCRIPT.md §3), so changing a duration
- * means re-timing that scene. Verdict and Outro lengths are placeholders: re-time them against
- * the real /demo screen recordings (register identity → post root → prove → verify → second
- * claim rejected), which have to be captured after the Vercel redeploy, per STATUS.md.
+ * Submission demo video (cap 3:00). The running order, lengths and sound cues are in
+ * timeline.ts; SCRIPT.md §3 has the beat sheet and the narration.
  */
 export function JudgesDemo() {
-  const { fps } = useVideoConfig();
-
   return (
     <>
-      <Sequence from={0} durationInFrames={fps * 3}>
-        <Intro />
-      </Sequence>
-      <Sequence from={fps * 3} durationInFrames={fps * 10}>
-        <Problem />
-      </Sequence>
-      <Sequence from={fps * 13} durationInFrames={fps * 15}>
-        <Procedure />
-      </Sequence>
-      {/* The DAO/faucet/agent demos go here as real screen-recordings — see TODO in scenes/Verdict.tsx. */}
-      <Sequence from={fps * 28} durationInFrames={fps * 8}>
-        <Verdict status="accepted" />
-      </Sequence>
-      <Sequence from={fps * 36} durationInFrames={fps * 8}>
-        <Verdict status="rejected" reason="nullifier already used" />
-      </Sequence>
-      <Sequence from={fps * 44} durationInFrames={fps * 90 - fps * 44}>
-        <Outro />
-      </Sequence>
+      {(Object.keys(SCENES) as SceneKey[]).map((key) => {
+        const Scene = SCENES[key];
+        const { from, frames } = DEMO.scenes[key];
+        return (
+          <Sequence key={key} name={key} from={from} durationInFrames={frames}>
+            <Scene />
+          </Sequence>
+        );
+      })}
+      <Soundtrack voice={DEMO.voice} sfx={DEMO.sfx} frames={DEMO.frames} />
     </>
   );
 }
