@@ -61,6 +61,8 @@ placeholder:
   item F), which does not exist yet.
 - `scenes/Outro.tsx` — add the live site URL once the Vercel redeploy is confirmed.
 
+How to capture that footage, take by take, is in [`RECORDING.md`](./RECORDING.md).
+
 To add a screen recording: drop the file in `public/`, reference it with Remotion's
 `<OffthreadVideo src={staticFile("name.mp4")} />` inside a scene, and wrap that scene in a
 `<Sequence>` in `JudgesDemo.tsx` sized to the recording's real length.
