@@ -3,9 +3,11 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { toJudgesProof, type JudgesProof } from "@judges/sdk";
 import type { Address, WalletClient } from "viem";
-import { explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesConfig";
+import { judgesVerifierAbi } from "@/lib/abis";
+import { addresses, explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesConfig";
 import { proveMembershipInBrowser } from "@/lib/proveBrowser";
 import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
+import { publicClient } from "@/lib/wallet";
 import { Marginalia } from "./Document";
 import { Steps } from "./Progress";
 import { SiteFrame } from "./SiteFrame";
@@ -22,7 +24,27 @@ export type DemoStatus =
   | { kind: "idle" }
   | { kind: "busy"; step: number }
   | { kind: "success"; message: string; txHash?: `0x${string}` }
-  | { kind: "error"; message: string; step?: number };
+  /** `rejected`: the run stopped because this credential has already acted in this app. */
+  | { kind: "error"; message: string; step?: number; rejected?: boolean };
+
+const ALREADY_USED =
+  "NullifierAlreadyUsed: this credential has already acted in this app, so the contract rejects it. Nothing was sent.";
+
+/**
+ * Whether this credential has already acted in this app, read from the registry itself.
+ *
+ * The verdict has to come from chain state, not from the text of a failed call: the revert
+ * (NullifierAlreadyUsed) is declared by NullifierRegistry, not by the demo contracts, so it is not
+ * in their ABIs and a wallet reports it as an undecodable error at best.
+ */
+function nullifierUsed(proof: JudgesProof): Promise<boolean> {
+  return publicClient().readContract({
+    address: addresses.judgesVerifier!,
+    abi: judgesVerifierAbi,
+    functionName: "isNullifierUsed",
+    args: [proof.domain, proof.nullifier],
+  });
+}
 
 /**
  * Shared scaffolding for the three README §15 demos: wallet connection, the prove step, status
@@ -76,6 +98,9 @@ export function DemoShell({
   const handleRun = useCallback(async () => {
     if (!account || !walletClient) return;
     let step = 0;
+    let proof: JudgesProof | undefined;
+    let sent = false;
+    let reverted = false;
     try {
       setStatus({ kind: "busy", step });
       const contextHash = await action.contextHash(account);
@@ -89,20 +114,38 @@ export function DemoShell({
         contextHash,
         signIdentityMessage: (message) => walletClient.signMessage({ account, message }),
       });
-      const proof = toJudgesProof(raw, "user_verified", appId);
+      proof = toJudgesProof(raw, "user_verified", appId);
 
       step = 2;
       setStatus({ kind: "busy", step });
+      // A spent nullifier is certain to revert, so say so without asking the wallet to send it.
+      if (await nullifierUsed(proof)) {
+        setStatus({ kind: "error", message: ALREADY_USED, step, rejected: true });
+        return;
+      }
       const txHash = await action.submit({ proof, account, walletClient });
+      sent = true;
+
+      // The verdict is the mined result, not the fact that a transaction was sent.
+      const receipt = await publicClient().waitForTransactionReceipt({ hash: txHash, timeout: 60_000 });
+      if (receipt.status !== "success") {
+        reverted = true;
+        throw new Error(`The transaction was mined but reverted (${txHash}).`);
+      }
 
       setStatus({ kind: "success", message: "Done — nullifier consumed for this domain.", txHash });
     } catch (err) {
-      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Failed", step });
+      // A call that never went out, or one that was mined and reverted, may have lost to an earlier
+      // use of the nullifier. One that was sent and has simply not confirmed yet may be our own
+      // success, so that case is never reported as a rejection.
+      const mayBeRejection = step === 2 && proof !== undefined && (!sent || reverted);
+      const rejected = mayBeRejection && (await nullifierUsed(proof!).catch(() => false));
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Failed", step, rejected });
     }
   }, [account, walletClient, action, appId]);
 
-  // A reused credential reverts with this custom error; show it as the verdict it is.
-  const nullifierRejected = status.kind === "error" && status.message.includes("NullifierAlreadyUsed");
+  // A reused credential is rejected; show it as the verdict it is.
+  const nullifierRejected = status.kind === "error" && status.rejected === true;
 
   // How far the run got: every step ticked on success, the failing one marked on error.
   const progress =
