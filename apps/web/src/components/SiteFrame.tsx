@@ -1,6 +1,7 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { ViewTransition, type ReactNode } from "react";
 import { addresses, chain, NETWORK } from "@/lib/judgesConfig";
+import { Reveal } from "./Reveal";
 
 const networkLabel = NETWORK === "monad-mainnet" ? "Monad Mainnet" : "Monad Testnet";
 
@@ -16,7 +17,11 @@ const NOTES: { name: string; address: string | null }[] = [
   { name: "SybilResistantFaucet", address: addresses.faucet },
 ];
 
-/** Caption line, navigation, page body, and a footer set as footnotes. */
+/**
+ * Caption line, navigation, page body, and a footer set as footnotes. On in-app navigation the
+ * body and footer cross-fade as one page while the header, named for the view transition, holds
+ * still (styles in the Motion section of globals.css).
+ */
 export function SiteFrame({ children }: { children: ReactNode }) {
   const repo = process.env.NEXT_PUBLIC_REPO_URL;
   const deployed = NOTES.filter((note) => note.address);
@@ -61,7 +66,7 @@ export function SiteFrame({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <header className="page site-header">
+      <header className="page site-header" style={{ viewTransitionName: "site-header" }}>
         <p className="caption label">
           Judges Protocol · Slip opinion · {networkLabel} · Chain {chain.id}
         </p>
@@ -74,18 +79,22 @@ export function SiteFrame({ children }: { children: ReactNode }) {
         </nav>
       </header>
 
-      <main className="page">{children}</main>
+      <ViewTransition enter="page-in" exit="page-out" default="none">
+        <div className="page-turn">
+          <main className="page">{children}</main>
 
-      <footer className="page site-footer">
-        <ol>
-          {footnotes.map((note, i) => (
-            <li key={i}>
-              <span className="fn-n">{i + 1}</span>
-              <span>{note}</span>
-            </li>
-          ))}
-        </ol>
-      </footer>
+          <footer className="page site-footer">
+            <Reveal as="ol" className="reveal-stagger">
+              {footnotes.map((note, i) => (
+                <li key={i}>
+                  <span className="fn-n">{i + 1}</span>
+                  <span>{note}</span>
+                </li>
+              ))}
+            </Reveal>
+          </footer>
+        </div>
+      </ViewTransition>
     </>
   );
 }

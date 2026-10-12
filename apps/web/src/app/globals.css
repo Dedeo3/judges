@@ -118,32 +118,63 @@ a {
   padding-block: 1.25rem 0;
 }
 
+/* Rules that get drawn (see Motion) are pseudo-elements rather than borders, so they can scale. */
 .caption {
   display: block;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--ink);
+  position: relative;
+  padding-bottom: calc(0.75rem + 1px);
   overflow-wrap: anywhere;
 }
 
+.caption::after,
+.nav::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  background: var(--ink);
+  transform-origin: left;
+}
+
 .nav {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 1.5rem;
-  padding-block: 0.75rem;
-  border-bottom: 1px solid var(--rule);
+  padding-block: 0.75rem calc(0.75rem + 1px);
   font-family: var(--font-mono);
   font-size: 0.875rem;
 }
 
+.nav::after {
+  background: var(--rule);
+}
+
 .nav a {
+  position: relative;
   text-decoration: none;
 }
 
-.nav a:hover,
-.nav a[aria-current="page"] {
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.3em;
+.nav a::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -0.2em;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.nav a:hover::after,
+.nav a[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+/* Holds <main> and the footer so both can cross-fade as one page on navigation. */
+.page-turn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 main {
@@ -186,15 +217,25 @@ main {
 /* ── Sections: § number + marginalia in a narrow left column ───────────── */
 
 .sec {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   padding-block: 3rem;
-  border-top: 1px solid var(--rule);
 }
 
-.sec:first-of-type {
-  border-top: 0;
+.sec::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: var(--rule);
+  transform-origin: left;
+}
+
+.sec:first-of-type::before,
+.sec--flush::before {
+  display: none;
 }
 
 .sec-side {
@@ -368,6 +409,9 @@ td.num {
 /* ── Buttons & fields ──────────────────────────────────────────────────── */
 
 .btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: inline-block;
   border: 1px solid var(--ink);
   border-radius: 0;
@@ -382,9 +426,23 @@ td.num {
   cursor: pointer;
 }
 
-.btn:hover:not(:disabled) {
+/* The hover fill is a layer of ink behind the label, so it can wipe in from the left. */
+.btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
   background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.btn:hover:not(:disabled) {
   color: var(--paper);
+}
+
+.btn:hover:not(:disabled)::before {
+  transform: scaleX(1);
 }
 
 .btn:disabled {
@@ -654,4 +712,488 @@ input[type="checkbox"] {
   gap: 0.5rem;
   font-family: var(--font-mono);
   font-size: 0.875rem;
+}
+
+/* ── Progress while a proof is being made ──────────────────────────────── */
+
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.steps li {
+  display: grid;
+  grid-template-columns: 1.5rem minmax(0, 1fr);
+  color: var(--ink-muted);
+}
+
+.steps li[data-state="active"],
+.steps li[data-state="done"] {
+  color: var(--ink);
+}
+
+.steps li[data-state="failed"] {
+  color: var(--stamp);
+}
+
+.step-mark {
+  display: inline-block;
+  justify-self: start;
+}
+
+.working {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 24rem;
+}
+
+.sweep {
+  display: block;
+  position: relative;
+  height: 1px;
+  background: var(--rule);
+  overflow: hidden;
+}
+
+/* ── Pieces the load sequence animates ─────────────────────────────────── */
+
+/* Each letter is its own box so they can rise one at a time. The padding keeps the tail of the
+   g inside the clip while they do; the negative margin gives the space back. */
+.wordmark {
+  padding-block: 0.1em 0.24em;
+  margin-block: -0.1em -0.24em;
+}
+
+.wordmark > span {
+  display: inline-block;
+}
+
+.redact {
+  position: relative;
+  display: inline-block;
+}
+
+.tick {
+  display: inline-block;
+}
+
+.bar {
+  transform-origin: left;
+}
+
+/* ── Motion ────────────────────────────────────────────────────────────── */
+
+/*
+ * Ink landing on paper: rules are drawn, type is set, verdicts are stamped. Everything plays once
+ * and stops; the one loop is the hairline that sweeps while a proof is being generated. No
+ * parallax and no decoration that moves for its own sake.
+ *
+ * Three triggers:
+ *   html.is-loading   the first seconds after a full page load (removed by <LoadSequence>)
+ *   [data-reveal]     an element that was below the fold and has now scrolled in (<Reveal>)
+ *   hover / state     buttons, links, copy feedback, verdicts, progress
+ *
+ * Nothing is hidden unless an animation is about to show it. The server sends the finished page,
+ * so it is complete without JavaScript, and all of this is skipped under prefers-reduced-motion.
+ */
+:root {
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-stamp: cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* Order within a staggered group. The first of a nested group is reset explicitly, or it would
+   inherit its container's own place in the section. */
+.reveal-stagger > :nth-child(1),
+tbody tr:nth-child(1) {
+  --step: 0;
+}
+
+.sec-body > :nth-child(1),
+.reveal-stagger > :nth-child(2),
+tbody tr:nth-child(2) {
+  --step: 1;
+}
+
+.sec-body > :nth-child(2),
+.reveal-stagger > :nth-child(3),
+tbody tr:nth-child(3) {
+  --step: 2;
+}
+
+.sec-body > :nth-child(3),
+.reveal-stagger > :nth-child(4),
+tbody tr:nth-child(4) {
+  --step: 3;
+}
+
+.sec-body > :nth-child(4),
+.reveal-stagger > :nth-child(5),
+tbody tr:nth-child(5) {
+  --step: 4;
+}
+
+.sec-body > :nth-child(n + 5),
+.reveal-stagger > :nth-child(n + 6),
+tbody tr:nth-child(n + 6) {
+  --step: 5;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+@keyframes rule-draw {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes letter-rise {
+  from {
+    transform: translateY(1.3em);
+  }
+}
+
+/* A marker bar wipes across the phrase, then off the far side, leaving the words behind. */
+@keyframes redact {
+  0% {
+    transform: scaleX(0);
+    transform-origin: left;
+  }
+  45% {
+    transform: scaleX(1);
+    transform-origin: left;
+  }
+  55% {
+    transform: scaleX(1);
+    transform-origin: right;
+  }
+  100% {
+    transform: scaleX(0);
+    transform-origin: right;
+  }
+}
+
+@keyframes tick-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.2) rotate(-25deg);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.3) rotate(4deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes ink-flash {
+  from {
+    background: var(--ink);
+    color: var(--paper);
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(315%);
+  }
+}
+
+@keyframes page-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes page-rise {
+  from {
+    transform: translateY(0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Hover, press, feedback */
+
+  a {
+    transition: text-underline-offset 160ms var(--ease-out);
+  }
+
+  a:hover {
+    text-underline-offset: 0.32em;
+  }
+
+  .nav a::after {
+    transition: transform 220ms var(--ease-out);
+  }
+
+  .btn {
+    transition:
+      color 200ms var(--ease-out),
+      transform 80ms ease-out;
+  }
+
+  .btn::before {
+    transition: transform 240ms var(--ease-out);
+  }
+
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .hash[data-copied],
+  .linkbtn[data-copied] {
+    animation: ink-flash 600ms var(--ease-out);
+  }
+
+  /* Verdicts and progress */
+
+  .verdict--accepted .tick {
+    animation: tick-in 380ms var(--ease-stamp) both;
+    animation-delay: var(--verdict-delay, 0ms);
+  }
+
+  .verdict--accepted .tick + span {
+    animation: fade-in 300ms ease-out both;
+    animation-delay: calc(var(--verdict-delay, 0ms) + 120ms);
+  }
+
+  .steps li[data-state="done"] .step-mark,
+  .steps li[data-state="failed"] .step-mark {
+    animation: tick-in 380ms var(--ease-stamp) both;
+  }
+
+  .sweep::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 32%;
+    background: var(--ink);
+    animation: sweep 1300ms var(--ease-in-out) infinite;
+  }
+
+  /* Load sequence */
+
+  /* These fill backwards only: once played they must not sit on top of the reveal transitions. */
+  html.is-loading .caption::after {
+    animation: rule-draw 700ms var(--ease-out) backwards;
+  }
+
+  html.is-loading .nav::after {
+    animation: rule-draw 700ms var(--ease-out) 120ms backwards;
+  }
+
+  html.is-loading .caption,
+  html.is-loading .nav a {
+    animation: fade-in 450ms ease-out backwards;
+  }
+
+  html.is-loading .nav a:nth-child(1) {
+    animation-delay: 120ms;
+  }
+
+  html.is-loading .nav a:nth-child(2) {
+    animation-delay: 170ms;
+  }
+
+  html.is-loading .nav a:nth-child(3) {
+    animation-delay: 220ms;
+  }
+
+  html.is-loading .nav a:nth-child(4) {
+    animation-delay: 270ms;
+  }
+
+  html.is-loading .nav a:nth-child(n + 5) {
+    animation-delay: 320ms;
+  }
+
+  /* `--i` is the element's place in the sequence; set it with step() from @/lib/motion. */
+  html.is-loading .enter {
+    animation: rise-in 650ms var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 90ms + 200ms);
+  }
+
+  /* Same entrance for every child of a section body, in document order. */
+  html.is-loading .enter-each > * {
+    animation: rise-in 650ms var(--ease-out) backwards;
+    animation-delay: calc(var(--step, 0) * 80ms + 250ms);
+  }
+
+  html.is-loading .wordmark {
+    overflow: hidden;
+  }
+
+  html.is-loading .wordmark > span {
+    animation: letter-rise 720ms var(--ease-out) backwards;
+    animation-delay: calc(var(--i, 0) * 45ms + 150ms);
+  }
+
+  html.is-loading .redact::after {
+    content: "";
+    position: absolute;
+    inset: 0.12em -0.08em 0.06em;
+    background: var(--ink);
+    animation: redact 1100ms var(--ease-in-out) 900ms both;
+  }
+
+  html.is-loading .redact > span {
+    animation: fade-in 1ms linear 1450ms both;
+  }
+
+  /* One character at a time: each simply switches on when its turn comes. */
+  html.is-loading .code-char {
+    animation: fade-in 1ms linear backwards;
+    animation-delay: calc(var(--i, 0) * 9ms + 950ms);
+  }
+
+  html.is-loading .panel.enter dl > div {
+    animation: fade-in 420ms ease-out backwards;
+    animation-delay: calc(var(--row, 0) * 120ms + 1150ms);
+  }
+
+  .panel dl > div:nth-child(2) {
+    --row: 1;
+  }
+
+  .panel dl > div:nth-child(3) {
+    --row: 2;
+  }
+
+  .panel dl > div:nth-child(n + 4) {
+    --row: 3;
+  }
+
+  html.is-loading .ledger li:first-child {
+    --verdict-delay: 1700ms;
+  }
+
+  /* Scrolled into view */
+
+  .sec[data-reveal="pending"]::before {
+    transform: scaleX(0);
+  }
+
+  .sec[data-reveal="in"]::before {
+    transition: transform 900ms var(--ease-out);
+  }
+
+  .sec[data-reveal="pending"] > .sec-side,
+  .sec[data-reveal="pending"] > .sec-body > *,
+  .reveal-stagger[data-reveal="pending"] > * {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+
+  .sec[data-reveal="in"] > .sec-side,
+  .sec[data-reveal="in"] > .sec-body > *,
+  .reveal-stagger[data-reveal="in"] > * {
+    transition:
+      opacity 600ms var(--ease-out),
+      transform 600ms var(--ease-out);
+    transition-delay: calc(var(--step, 0) * 80ms + 100ms);
+  }
+
+  [data-reveal="pending"] tbody tr {
+    opacity: 0;
+  }
+
+  [data-reveal="in"] tbody tr {
+    transition: opacity 500ms ease-out;
+    transition-delay: calc(var(--step, 0) * 110ms + 250ms);
+  }
+
+  [data-reveal="pending"] .bar {
+    transform: scaleX(0);
+  }
+
+  [data-reveal="in"] .bar {
+    transition: transform 1000ms var(--ease-out);
+    transition-delay: calc(var(--step, 0) * 140ms + 450ms);
+  }
+
+  /* The procedure diagram draws itself box by box; pathLength="1" on each shape makes one dash
+     the whole outline. */
+  [data-reveal] .procedure .line {
+    stroke-dasharray: 1.02;
+  }
+
+  [data-reveal="pending"] .procedure .line {
+    stroke-dashoffset: 1.02;
+  }
+
+  [data-reveal="pending"] .procedure text {
+    opacity: 0;
+  }
+
+  [data-reveal="in"] .procedure .line {
+    transition: stroke-dashoffset 520ms var(--ease-in-out);
+    transition-delay: calc(var(--i, 0) * 260ms);
+  }
+
+  [data-reveal="in"] .procedure .link {
+    transition-delay: calc(var(--i, 0) * 260ms + 200ms);
+  }
+
+  [data-reveal="in"] .procedure text {
+    transition: opacity 320ms ease-out;
+    transition-delay: calc(var(--i, 0) * 260ms + 240ms);
+  }
+
+  /* Between pages: the old page fades, the new one rises in under a header that stays put. */
+  ::view-transition-old(.page-out) {
+    animation: page-out 140ms ease-in both;
+  }
+
+  ::view-transition-new(.page-in) {
+    animation:
+      fade-in 260ms var(--ease-out) 110ms both,
+      page-rise 380ms var(--ease-out) both;
+  }
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-old(site-header) {
+  display: none;
+}
+
+::view-transition-new(site-header) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 }

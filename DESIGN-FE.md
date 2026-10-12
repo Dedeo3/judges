@@ -78,7 +78,14 @@ Terapkan token dan komponen yang sama. Jangan ubah logika/hook/SDK call.
 - `<Hash value>`: memotong tengah, `title` berisi nilai penuh, klik = salin + umpan balik teks "copied" 1.5 detik.
 - `<Marginalia>` dan `<Footnote>` sebagai komponen; nomor § otomatis dari satu array konfigurasi.
 - Tombol: satu gaya saja, persegi, border 1px tinta, hover = balik warna (ink/paper). Tautan = garis bawah tipis.
-- Selain stempel, tidak ada animasi lain (tanpa parallax, tanpa fade-in per seksi, tanpa marquee).
+- Gerak (revisi 2026-10-12; menggantikan aturan lama "selain stempel, tidak ada animasi lain"). Situs tetap dokumen putusan, jadi gerak harus terbaca sebagai tinta yang mendarat di kertas: garis ditarik, huruf diset, verdict dicap.
+  - Hanya tiga pemicu: urutan saat halaman dimuat (`html.is-loading`), elemen yang baru masuk viewport (`<Reveal>`, atribut `data-reveal`), dan hover/status (tombol, tautan, "copied", verdict, progres demo).
+  - Semua dimainkan sekali lalu berhenti. Satu-satunya loop adalah garis tipis yang menyapu selama bukti sedang dibuat.
+  - Tetap DILARANG: parallax, marquee, glow, bayangan, dan dekorasi yang bergerak tanpa makna.
+  - CSS + IntersectionObserver saja; tanpa library animasi (§7 tetap berlaku).
+  - `prefers-reduced-motion` dan tanpa JavaScript: halaman tampil lengkap dan diam. Tidak ada elemen yang disembunyikan kecuali animasinya memang akan menampilkannya.
+  - Antar-halaman: cross-fade singkat lewat `<ViewTransition>` bawaan React; header tidak ikut bergerak.
+  - Rinciannya ada di bagian "Motion" pada `apps/web/src/app/globals.css`.
 
 ## 6. DILARANG (pola "AI flop")
 - Tema gelap hitam + ungu/neon, gradien pada teks/tombol/latar, glassmorphism, glow.

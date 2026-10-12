@@ -4,6 +4,7 @@ import { useState } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { Address, WalletClient } from "viem";
 import { Marginalia } from "@/components/Document";
+import { Working } from "@/components/Progress";
 import { SiteFrame } from "@/components/SiteFrame";
 import { Verdict } from "@/components/Verdict";
 import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
@@ -126,8 +127,8 @@ export default function DemoPage() {
 
   return (
     <SiteFrame>
-      <article className="sec" style={{ borderTop: 0 }}>
-        <div className="sec-side">
+      <article className="sec sec--flush">
+        <div className="sec-side enter">
           <span className="sec-num">Demos</span>
           <Marginalia>
             A passkey gates registration (a real user is present); your identity secret is derived from a wallet
@@ -135,7 +136,7 @@ export default function DemoPage() {
           </Marginalia>
         </div>
 
-        <div className="sec-body">
+        <div className="sec-body enter-each">
           <h1 className="h1-demo">Register your identity</h1>
           <p>
             Two steps, once per device: create a passkey, then register an identity. The identity commitment is
@@ -194,6 +195,7 @@ export default function DemoPage() {
           </ul>
 
           <div role="status" aria-live="polite">
+            {busy && <Working>Working. Follow the prompts from your device and wallet.</Working>}
             {status.kind === "success" && (
               <div className="stack">
                 <Verdict status="accepted" />

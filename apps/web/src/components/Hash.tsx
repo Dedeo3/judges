@@ -27,7 +27,7 @@ export function Hash({ value, head = 6, tail = 4 }: { value: string; head?: numb
   }
 
   return (
-    <button type="button" className="hash" title={value} onClick={copy} aria-label={`Copy ${value}`}>
+    <button type="button" className="hash" title={value} onClick={copy} aria-label={`Copy ${value}`} data-copied={copied || undefined}>
       {copied ? "copied" : shorten(value, head, tail)}
     </button>
   );

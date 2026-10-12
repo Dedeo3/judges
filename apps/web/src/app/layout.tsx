@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Newsreader } from "next/font/google";
+import { LoadSequence } from "@/components/LoadSequence";
 import { PrivyProviders } from "@/providers/PrivyProviders";
 import "./globals.css";
 
@@ -27,9 +28,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${newsreader.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`${newsreader.variable} ${plexMono.variable} is-loading`}>
       <body>
         <PrivyProviders>{children}</PrivyProviders>
+        <LoadSequence />
         {/* The REJECTED stamp starts hidden and animates in; without JS it must still be readable. */}
         <noscript>
           <style>{`.stamp{opacity:1}`}</style>

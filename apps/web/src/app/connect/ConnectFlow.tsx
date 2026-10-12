@@ -8,6 +8,7 @@ import {
   type ConnectMessage,
   type ConnectRequest,
 } from "@judges/sdk";
+import { Working } from "@/components/Progress";
 import { proveMembershipInBrowser } from "@/lib/proveBrowser";
 import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
 
@@ -132,8 +133,8 @@ export default function ConnectFlow() {
       </header>
 
       {state.kind === "blocked" && (
-        <section className="sec" style={{ borderTop: 0 }}>
-          <div className="sec-body">
+        <section className="sec sec--flush">
+          <div className="sec-body enter-each">
             <h1>{state.title}</h1>
             <p>{state.detail}</p>
           </div>
@@ -141,8 +142,8 @@ export default function ConnectFlow() {
       )}
 
       {state.kind === "done" && (
-        <section className="sec" style={{ borderTop: 0 }}>
-          <div className="sec-body">
+        <section className="sec sec--flush">
+          <div className="sec-body enter-each">
             <h1>Verified</h1>
             <p>You can close this window.</p>
           </div>
@@ -150,8 +151,8 @@ export default function ConnectFlow() {
       )}
 
       {(state.kind === "consent" || working || state.kind === "retry") && (
-        <section className="sec" style={{ borderTop: 0 }}>
-          <div className="sec-body">
+        <section className="sec sec--flush">
+          <div className="sec-body enter-each">
             <h1 style={{ fontSize: "clamp(2rem, 4vw, 3rem)" }}>Verify you&apos;re a real user</h1>
             <p>
               <strong className="mono" style={{ wordBreak: "break-all" }}>
@@ -194,7 +195,7 @@ export default function ConnectFlow() {
                 {state.message}
               </p>
             )}
-            {working && <p className="muted">{state.message}</p>}
+            {working && <Working>{state.message}</Working>}
 
             <div className="stack" style={{ marginTop: "1.5rem" }}>
               <button className="btn" onClick={() => handleVerify(state.request, state.effectiveAppId)} disabled={working}>

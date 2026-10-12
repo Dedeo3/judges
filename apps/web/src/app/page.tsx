@@ -2,11 +2,13 @@ import Link from "next/link";
 import { CodeBlock } from "@/components/CodeBlock";
 import { Footnote, Marginalia, Section } from "@/components/Document";
 import { Hash } from "@/components/Hash";
+import { Reveal } from "@/components/Reveal";
 import { SiteFrame } from "@/components/SiteFrame";
 import { Verdict } from "@/components/Verdict";
 import { getDocketState, getRecordedVerdict } from "@/lib/chainState";
 import { shorten } from "@/lib/format";
 import { addresses, chain, explorerTxUrl } from "@/lib/judgesConfig";
+import { step } from "@/lib/motion";
 import { OPINION_SECTIONS as S } from "@/lib/sections";
 
 // Chain reads are refreshed at most once a minute; the page itself is otherwise static.
@@ -79,21 +81,26 @@ function Procedure() {
         Five steps from passkey to application: passkey, user verification, proof, JudgesVerifier on Monad,
         application.
       </title>
-      {steps.map((step, i) => {
+      {/* pathLength lets the stylesheet draw each outline as a single dash when the section scrolls in. */}
+      {steps.map((item, i) => {
         const y = 1 + i * (boxH + gap);
         return (
-          <g key={step.title}>
-            <rect className="line" x="1" y={y} width="358" height={boxH} />
+          <g key={item.title} style={step(i)}>
+            <rect className="line" x="1" y={y} width="358" height={boxH} pathLength={1} />
             <text x="16" y={y + 26} fontSize="14" fontWeight="500">
-              {i + 1}. {step.title}
+              {i + 1}. {item.title}
             </text>
             <text className="sub" x="16" y={y + 48} fontSize="12">
-              {step.sub}
+              {item.sub}
             </text>
             {i < steps.length - 1 && (
               <>
-                <path className="line" d={`M180 ${y + boxH} V${y + boxH + gap}`} />
-                <path className="line" d={`M174 ${y + boxH + gap - 7} L180 ${y + boxH + gap} L186 ${y + boxH + gap - 7}`} />
+                <path className="line link" d={`M180 ${y + boxH} V${y + boxH + gap}`} pathLength={1} />
+                <path
+                  className="line link"
+                  d={`M174 ${y + boxH + gap - 7} L180 ${y + boxH + gap} L186 ${y + boxH + gap - 7}`}
+                  pathLength={1}
+                />
               </>
             )}
           </g>
@@ -109,8 +116,9 @@ export default async function Home() {
 
   return (
     <SiteFrame>
+      {/* The numbers passed to step() are this section's load sequence, in order of appearance. */}
       <section id="opinion" className="sec" aria-labelledby="opinion-title">
-        <div className="sec-side">
+        <div className="sec-side enter" style={step(3)}>
           <span className="sec-num">Opinion</span>
           <Marginalia>
             Filed on {chain.name}, chain {chain.id}. Every value in the Verdict panel is read from a transaction
@@ -118,15 +126,24 @@ export default async function Home() {
           </Marginalia>
         </div>
         <div className="sec-body sec-body--wide">
-          <h1 id="opinion-title">Judges</h1>
-          <p className="claim">
-            A wallet, backed by a passkey that passed user verification. Nothing else disclosed.
+          <h1 id="opinion-title" className="wordmark" aria-label="Judges">
+            {Array.from("Judges", (letter, i) => (
+              <span key={i} aria-hidden="true" style={step(i)}>
+                {letter}
+              </span>
+            ))}
+          </h1>
+          <p className="claim enter" style={step(4)}>
+            A wallet, backed by a passkey that passed user verification.{" "}
+            <span className="redact">
+              <span>Nothing else disclosed.</span>
+            </span>
           </p>
 
           <div className="hero-cols">
-            <CodeBlock code={HERO_SNIPPET} label="typescript" wrap />
+            <CodeBlock code={HERO_SNIPPET} label="typescript" wrap typed className="enter" style={step(6)} />
 
-            <div className="panel" aria-label="Verdict">
+            <div className="panel enter" style={step(7)} aria-label="Verdict">
               <div className="panel-head label">Verdict</div>
               {verdict ? (
                 <dl className="mono" style={{ fontSize: "0.875rem" }}>
@@ -176,17 +193,17 @@ export default async function Home() {
           </div>
 
           <div>
-            <ol className="ledger" aria-label="Two attempts with the same credential">
-              <li>
+            <ol className="ledger enter" style={step(13)} aria-label="Two attempts with the same credential">
+              <li className="enter" style={step(15)}>
                 <span className="label muted">Attempt 1</span>
                 <Verdict status="accepted" />
               </li>
-              <li>
+              <li className="enter" style={step(18)}>
                 <span className="label muted">Attempt 2, same credential</span>
-                <Verdict status="rejected" reason="nullifier already used" />
+                <Verdict status="rejected" reason="nullifier already used" loadDelayMs={2300} />
               </li>
             </ol>
-            <p className="margin" style={{ maxWidth: "none", marginTop: "0.5rem" }}>
+            <p className="margin enter" style={{ maxWidth: "none", marginTop: "0.5rem", ...step(20) }}>
               Enforced by NullifierRegistry and covered by contracts/test/NullifierRegistry.t.sol.
             </p>
           </div>
@@ -278,7 +295,7 @@ export default async function Home() {
       </Section>
 
       <Section list={S} id="docket">
-        <ol className="docket">
+        <Reveal as="ol" className="docket reveal-stagger">
           <li>
             <span className="label muted">Docket 1</span>
             <h3>DAO vote</h3>
@@ -320,7 +337,7 @@ export default async function Home() {
               <Link href="/demo/faucet">Open the faucet demo</Link>
             </p>
           </li>
-        </ol>
+        </Reveal>
       </Section>
 
       <Section
@@ -332,13 +349,13 @@ export default async function Home() {
           Five limitations we know about and ship anyway. They are stated here in full, with the same weight as
           everything above.
         </p>
-        <ol className="footnotes">
+        <Reveal as="ol" className="footnotes reveal-stagger">
           {DISSENT.map((item, i) => (
             <Footnote key={item.title} n={i + 1}>
               <strong style={{ fontWeight: 600 }}>{item.title}</strong> {item.body}
             </Footnote>
           ))}
-        </ol>
+        </Reveal>
       </Section>
     </SiteFrame>
   );

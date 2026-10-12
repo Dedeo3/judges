@@ -3,11 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 
 /**
- * A verdict is either ACCEPTED (plain ink) or REJECTED (the only place the accent colour appears).
- * The REJECTED stamp lands once, when it scrolls into view or when a demo actually receives a
- * rejection. Reduced-motion users get the stamp with no animation (see globals.css).
+ * A verdict is either ACCEPTED (plain ink, the tick set in with a small flourish) or REJECTED (the
+ * only place the accent colour appears). The REJECTED stamp lands once, when it scrolls into view
+ * or when a demo actually receives a rejection. Reduced-motion users get both with no animation
+ * (see globals.css).
+ *
+ * `loadDelayMs` is for a stamp that is part of a page's load sequence: while that sequence is
+ * still playing, the stamp waits this long after mounting so it lands after its row has appeared.
  */
-export function Verdict({ status, reason }: { status: "accepted" | "rejected"; reason?: string }) {
+export function Verdict({
+  status,
+  reason,
+  loadDelayMs = 0,
+}: {
+  status: "accepted" | "rejected";
+  reason?: string;
+  loadDelayMs?: number;
+}) {
   const ref = useRef<HTMLSpanElement>(null);
   const [stamped, setStamped] = useState(false);
 
@@ -16,23 +28,32 @@ export function Verdict({ status, reason }: { status: "accepted" | "rejected"; r
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
 
+    const wait = document.documentElement.classList.contains("is-loading") ? loadDelayMs : 0;
+    const mountedAt = performance.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          setStamped(true);
           observer.disconnect();
+          timer = setTimeout(() => setStamped(true), Math.max(0, wait - (performance.now() - mountedAt)));
         }
       },
       { threshold: 0.6 },
     );
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [status]);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [status, loadDelayMs]);
 
   if (status === "accepted") {
     return (
-      <span className="verdict">
-        <span aria-hidden="true">✓</span>
+      <span className="verdict verdict--accepted">
+        <span className="tick" aria-hidden="true">
+          ✓
+        </span>
         <span>Accepted</span>
       </span>
     );

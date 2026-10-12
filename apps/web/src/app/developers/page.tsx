@@ -85,11 +85,11 @@ export default function DevelopersPage() {
 
   return (
     <SiteFrame>
-      <header className="sec" style={{ borderTop: 0 }}>
-        <div className="sec-side">
+      <header className="sec sec--flush">
+        <div className="sec-side enter">
           <span className="sec-num">Developers</span>
         </div>
-        <div className="sec-body">
+        <div className="sec-body enter-each">
           <h1>Developers</h1>
           <p className="claim">
             Verify that a wallet is backed by a user-verified passkey. No identity disclosure, no KYC, no

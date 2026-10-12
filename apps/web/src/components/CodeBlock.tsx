@@ -1,9 +1,28 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { step } from "@/lib/motion";
 
-/** A block of code on slightly darker paper, with a plain-text copy control. */
-export function CodeBlock({ code, label, wrap }: { code: string; label?: string; wrap?: boolean }) {
+/**
+ * A block of code on slightly darker paper, with a plain-text copy control. With `typed`, each
+ * character is its own element so the page's load sequence can type the snippet out in order,
+ * whatever way the lines happen to wrap.
+ */
+export function CodeBlock({
+  code,
+  label,
+  wrap,
+  typed,
+  className,
+  style,
+}: {
+  code: string;
+  label?: string;
+  wrap?: boolean;
+  typed?: boolean;
+  className?: string;
+  style?: CSSProperties;
+}) {
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -26,15 +45,23 @@ export function CodeBlock({ code, label, wrap }: { code: string; label?: string;
   }
 
   return (
-    <figure className={`code${wrap ? " code--wrap" : ""}`} style={{ margin: 0 }}>
+    <figure className={`code${wrap ? " code--wrap" : ""}${className ? ` ${className}` : ""}`} style={{ margin: 0, ...style }}>
       <div className="code-bar label muted">
         <span>{label ?? "code"}</span>
-        <button type="button" className="linkbtn" onClick={copy}>
+        <button type="button" className="linkbtn" onClick={copy} data-copied={copied || undefined}>
           {copied ? "copied" : "copy"}
         </button>
       </div>
       <pre tabIndex={0}>
-        <code>{code}</code>
+        <code>
+          {typed
+            ? Array.from(code, (char, i) => (
+                <span key={i} className="code-char" style={step(i)}>
+                  {char}
+                </span>
+              ))
+            : code}
+        </code>
       </pre>
     </figure>
   );

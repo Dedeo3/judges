@@ -7,14 +7,22 @@ import { explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesCo
 import { proveMembershipInBrowser } from "@/lib/proveBrowser";
 import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
 import { Marginalia } from "./Document";
+import { Steps } from "./Progress";
 import { SiteFrame } from "./SiteFrame";
 import { Verdict } from "./Verdict";
 
+/** What a run does, in order. `step` in the status below is an index into this list. */
+const RUN_STEPS = [
+  "Read the action binding from the contract",
+  "Sign the identity message, then prove in your browser",
+  "Submit to Monad",
+] as const;
+
 export type DemoStatus =
   | { kind: "idle" }
-  | { kind: "busy"; message: string }
+  | { kind: "busy"; step: number }
   | { kind: "success"; message: string; txHash?: `0x${string}` }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string; step?: number };
 
 /**
  * Shared scaffolding for the three README §15 demos: wallet connection, the prove step, status
@@ -67,11 +75,13 @@ export function DemoShell({
 
   const handleRun = useCallback(async () => {
     if (!account || !walletClient) return;
+    let step = 0;
     try {
-      setStatus({ kind: "busy", message: "Reading action binding from the contract…" });
+      setStatus({ kind: "busy", step });
       const contextHash = await action.contextHash(account);
 
-      setStatus({ kind: "busy", message: "Sign the identity message, then proving in your browser…" });
+      step = 1;
+      setStatus({ kind: "busy", step });
       const raw = await proveMembershipInBrowser({
         appId,
         wallet: account,
@@ -81,22 +91,27 @@ export function DemoShell({
       });
       const proof = toJudgesProof(raw, "user_verified", appId);
 
-      setStatus({ kind: "busy", message: "Submitting to Monad…" });
+      step = 2;
+      setStatus({ kind: "busy", step });
       const txHash = await action.submit({ proof, account, walletClient });
 
       setStatus({ kind: "success", message: "Done — nullifier consumed for this domain.", txHash });
     } catch (err) {
-      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Failed" });
+      setStatus({ kind: "error", message: err instanceof Error ? err.message : "Failed", step });
     }
   }, [account, walletClient, action, appId]);
 
   // A reused credential reverts with this custom error; show it as the verdict it is.
   const nullifierRejected = status.kind === "error" && status.message.includes("NullifierAlreadyUsed");
 
+  // How far the run got: every step ticked on success, the failing one marked on error.
+  const progress =
+    status.kind === "busy" ? status.step : status.kind === "success" ? RUN_STEPS.length : status.kind === "error" ? status.step : undefined;
+
   return (
     <SiteFrame>
-      <article className="sec" style={{ borderTop: 0 }}>
-        <div className="sec-side">
+      <article className="sec sec--flush">
+        <div className="sec-side enter">
           <span className="sec-num">
             <a href="/demo">Demos</a>
           </span>
@@ -106,7 +121,7 @@ export function DemoShell({
           </Marginalia>
         </div>
 
-        <div className="sec-body">
+        <div className="sec-body enter-each">
           <h1 className="h1-demo">{title}</h1>
           <div className="intro">{intro}</div>
 
@@ -132,8 +147,10 @@ export function DemoShell({
             </button>
           </div>
 
-          <div role="status" aria-live="polite">
-            {status.kind === "busy" && <p className="muted">{status.message}</p>}
+          <div role="status" aria-live="polite" className="stack">
+            {progress !== undefined && (
+              <Steps labels={RUN_STEPS} current={progress} failed={status.kind === "error"} />
+            )}
 
             {status.kind === "success" && (
               <div className="stack">

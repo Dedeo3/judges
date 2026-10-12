@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { sectionNumber, sectionTitle, type SectionDef } from "@/lib/sections";
+import { Reveal } from "./Reveal";
 
 /** A short note set in the margin. On narrow screens it sits inline above the section body. */
 export function Marginalia({ children }: { children: ReactNode }) {
@@ -18,7 +19,8 @@ export function Footnote({ n, children }: { n: number; children: ReactNode }) {
 
 /**
  * One numbered section. The § number and heading come from the section list (`@/lib/sections`),
- * never typed by hand, so reordering the list renumbers the page.
+ * never typed by hand, so reordering the list renumbers the page. Its rule is drawn and its
+ * contents set when it scrolls into view (see `Reveal`).
  */
 export function Section({
   list,
@@ -34,15 +36,15 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="sec" aria-labelledby={`${id}-title`}>
-      <div className="sec-side">
+    <Reveal as="section" id={id} className="sec" aria-labelledby={`${id}-title`}>
+      <div className="sec-side enter">
         <span className="sec-num">§ {sectionNumber(list, id)}</span>
         {margin && <Marginalia>{margin}</Marginalia>}
       </div>
-      <div className={`sec-body${wide ? " sec-body--wide" : ""}`}>
+      <div className={`sec-body enter-each${wide ? " sec-body--wide" : ""}`}>
         <h2 id={`${id}-title`}>{sectionTitle(list, id)}</h2>
         {children}
       </div>
-    </section>
+    </Reveal>
   );
 }
