@@ -1,5 +1,4 @@
-import { CheckIcon, FingerprintIcon, GavelIcon, LockKeyIcon } from "@phosphor-icons/react";
-import type { CSSProperties } from "react";
+import { CheckIcon, KeyIcon, LockKeyIcon, StampIcon } from "@phosphor-icons/react";
 import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { colors, fonts } from "../theme";
 import { CLAMP, Caption, HeaderStrip, RedactBar, Stage, Stamp, pop } from "./stage";
@@ -224,15 +223,18 @@ function Summary() {
 
 type VignetteProps = { start: number };
 
+const PIN_AT = [14, 21, 28, 35];
+
+/**
+ * User verification shown as a PIN being entered, not a fingerprint or face: the site's design
+ * brief (DESIGN-FE.md §6) keeps biometric imagery out because it suggests biometrics are collected.
+ */
 function PasskeyVignette({ start }: VignetteProps) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const t = frame - start;
-  const scan = interpolate(t, [12, 44], [0, 1], { ...CLAMP, easing: Easing.inOut(Easing.quad) });
-  const scanning = interpolate(t, [10, 13, 44, 47], [0, 1, 1, 0], CLAMP);
   const verified = t >= 46;
   const ring = interpolate(t, [46, 72], [0, 1], CLAMP);
-  const corner: CSSProperties = { position: "absolute", width: 28, height: 28, borderColor: colors.ink, borderStyle: "solid" };
 
   return (
     <>
@@ -266,27 +268,45 @@ function PasskeyVignette({ start }: VignetteProps) {
       >
         <div style={{ position: "absolute", left: 91, top: 16, width: 70, height: 12, borderRadius: 6, background: colors.ink }} />
 
-        <div style={{ position: "absolute", left: 26, top: 96, width: 200, height: 200 }}>
-          <div style={{ ...corner, left: 0, top: 0, borderWidth: "3px 0 0 3px" }} />
-          <div style={{ ...corner, right: 0, top: 0, borderWidth: "3px 3px 0 0" }} />
-          <div style={{ ...corner, left: 0, bottom: 0, borderWidth: "0 0 3px 3px" }} />
-          <div style={{ ...corner, right: 0, bottom: 0, borderWidth: "0 3px 3px 0" }} />
-          <FingerprintIcon size={160} weight="light" color={colors.rule} style={{ position: "absolute", left: 20, top: 20 }} />
-          <div style={{ position: "absolute", left: 20, top: 20, width: 160, height: 160, clipPath: `inset(0 0 ${(1 - scan) * 100}% 0)` }}>
-            <FingerprintIcon size={160} weight="regular" color={colors.ink} />
-          </div>
-          <div
-            style={{
-              position: "absolute",
-              left: -4,
-              right: -4,
-              top: 20 + scan * 160 - 46,
-              height: 46,
-              opacity: scanning,
-              background: "linear-gradient(to top, rgba(21, 19, 15, 0.2), rgba(21, 19, 15, 0))",
-            }}
-          />
-          <div style={{ position: "absolute", left: -4, right: -4, top: 20 + scan * 160, height: 3, opacity: scanning, background: colors.ink }} />
+        <KeyIcon
+          size={124}
+          weight="duotone"
+          color={colors.ink}
+          style={{ position: "absolute", left: 64, top: 78, transform: `scale(${pop(frame, fps, start + 6, { damping: 13 })})` }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 218,
+            textAlign: "center",
+            fontFamily: fonts.mono,
+            fontSize: 14,
+            letterSpacing: "0.14em",
+            color: colors.muted,
+          }}
+        >
+          ENTER PIN
+        </div>
+        <div style={{ position: "absolute", left: 0, right: 0, top: 252, display: "flex", justifyContent: "center", gap: 16 }}>
+          {PIN_AT.map((at) => {
+            const entered = t >= at;
+            return (
+              <div
+                key={at}
+                style={{
+                  width: 26,
+                  height: 26,
+                  boxSizing: "border-box",
+                  borderRadius: "50%",
+                  border: `3px solid ${colors.ink}`,
+                  background: entered ? colors.ink : "transparent",
+                  transform: `scale(${entered ? 0.55 + 0.45 * pop(frame, fps, start + at) : 1})`,
+                }}
+              />
+            );
+          })}
         </div>
 
         <div
@@ -658,24 +678,20 @@ function ChainVignette({ start }: VignetteProps) {
 function VerdictVignette({ start }: VignetteProps) {
   const frame = useCurrentFrame();
   const t = frame - start;
-  const swing = interpolate(t, [4, 14, 26], [-42, 14, -6], { ...CLAMP, easing: Easing.inOut(Easing.quad) });
+  // The stamp comes down, presses, and lifts away, leaving the mark. (A stamp, not a gavel:
+  // DESIGN-FE.md §6 rules out courtroom props.)
+  const press = interpolate(t, [4, 15, 19, 32], [-200, 0, 0, -240], { ...CLAMP, easing: Easing.inOut(Easing.quad) });
+  const tool = interpolate(t, [2, 8, 24, 32], [0, 1, 1, 0], CLAMP);
 
   return (
     <>
-      <GavelIcon
-        size={150}
+      <Stamp text="Accepted" sub="JudgesVerifier · Monad 10143" color={colors.ink} at={start + 16} size={84} rotate={-6} style={{ left: -262, top: -112 }} />
+      <StampIcon
+        size={190}
         weight="fill"
         color={colors.ink}
-        style={{
-          position: "absolute",
-          left: -300,
-          top: -262,
-          opacity: interpolate(t, [0, 6], [0, 1], CLAMP),
-          transformOrigin: "85% 85%",
-          transform: `rotate(${swing}deg)`,
-        }}
+        style={{ position: "absolute", left: -95, top: -215, opacity: tool, transform: `translateY(${press}px)` }}
       />
-      <Stamp text="Accepted" sub="JudgesVerifier · Monad 10143" color={colors.ink} at={start + 16} size={84} rotate={-6} style={{ left: -262, top: -112 }} />
 
       <div
         style={{

@@ -1,4 +1,3 @@
-import { ScalesIcon } from "@phosphor-icons/react";
 import { Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import { colors, fonts } from "../theme";
 import { CLAMP, HEADER_TEXT, RedactBar, Rise, Stage, Stamp, pop } from "./stage";
@@ -192,9 +191,19 @@ function Seal() {
           <textPath href="#seal-ring">JUDGES PROTOCOL · SLIP OPINION · MONAD TESTNET · </textPath>
         </text>
       </g>
-      <g transform={`translate(100 100) scale(${icon}) translate(-41 -41)`}>
-        <ScalesIcon size={82} weight="light" color={colors.ink} />
-      </g>
+      {/* The site's own section mark, not scales or a gavel: DESIGN-FE.md §6 rules those out. */}
+      <text
+        x={100}
+        y={126}
+        textAnchor="middle"
+        fontFamily={fonts.serif}
+        fontSize={84}
+        fontWeight={500}
+        fill={colors.ink}
+        transform={`translate(100 100) scale(${icon}) translate(-100 -100)`}
+      >
+        §
+      </text>
     </svg>
   );
 }

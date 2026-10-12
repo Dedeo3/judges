@@ -39,8 +39,14 @@ The video takes that literally and turns it into objects:
 | Header strip on every scene | the site's top bar, verbatim | continuity with the product |
 | Marker redaction bars | "Nothing else disclosed" | privacy, shown instead of stated |
 | Rubber stamps (FILED, ACCEPTED, REJECTED) | the Verdict component | the on-chain result |
-| Seal with ring text | court seal | authority; a quiet moving detail |
+| Seal with ring text and a § | the site's section mark | authority; a quiet moving detail |
 | Exhibit A / Exhibit B / § 3 | the site's section numbering | each beat is a piece of evidence |
+
+**Kept out, as on the site** (`DESIGN-FE.md` §6): fingerprints, faces and eyes, because they
+suggest biometrics are being collected, and gavels, scales and courthouse pillars. So user
+verification is drawn as a PIN being entered, the verdict as a rubber stamp pressing down, and
+the seal carries a §. The one face-shaped thing in the video is the silhouette on the KYC form
+in beat 2b, which is the practice being argued against and ends up redacted.
 
 Palette and type are the site's: paper `#F1EDE4`, ink `#15130F`, Newsreader and IBM Plex Mono.
 Red still means one thing only — something that is or should be rejected (sybil wallets, leaked
@@ -59,7 +65,7 @@ does it work" mostly through pictures and footage.
 | 1 | Title | 3s | Cover sheet drops onto a desk; wordmark rises letter by letter; rule draws; three redaction bars wipe in; seal draws itself; FILED stamp slams and shakes the sheet | "Judges" · "A wallet, backed by a passkey." · "Nothing else disclosed." |
 | 2a | Problem — sybil (ink) | 5s | One person fans out into five wallets while a vote counter ticks up in red; camera pulls back and the frame floods with wallet dots as the counter runs to 5,000 | "One person, five votes?" |
 | 2b | Problem — privacy (paper) | 5s | A KYC form is scanned, its fields fly into "what the verifier keeps", then every field is redacted, the verifier's copy disappears and the form is stamped | "Prove you're real. Not who you are." |
-| 3 | Mechanism | 15s | Camera travels a track of four stations, 3s each: phone scanning a fingerprint → Merkle path lighting up, leaves redacted, proof chip appears → proof drops into a block, nullifier typed and marked consumed → gavel and ACCEPTED stamp, second attempt REJECTED. Ends on all four side by side | "Passkey" "Proof" "Chain" "Verdict" |
+| 3 | Mechanism | 15s | Camera travels a track of four stations, 3s each: phone holding a key while a PIN is entered → Merkle path lighting up, leaves redacted, proof chip appears → proof drops into a block, nullifier typed and marked consumed → a stamp presses down and leaves ACCEPTED, second attempt REJECTED. Ends on all four side by side | "Passkey" "Proof" "Chain" "Verdict" |
 | 4 | Real demo footage A | ~45–60s | Screen recording: register passkey, connect wallet (Privy), generate proof, verify on-chain | lower-third captions only |
 | 5 | Real demo footage B | ~20–30s | Screen recording: same credential tries again → rejected | caption, then verdict stamp |
 | 6 | Verdict (accepted) | 3s | Stamp | "ACCEPTED" |
@@ -113,8 +119,9 @@ attempt ledger and the claim line.
 typed fields, rotated rubber stamps, seals, photo boxes, a sheet lit on a dark surface. This is
 where the case-file treatment came from.
 
-**Pinterest, "fingerprint biometric scan".** Corner brackets and a sweeping scan line around a
-fingerprint; used for the passkey station.
+**Pinterest, "fingerprint biometric scan".** Looked at for the passkey station and then not
+used: the first build had a fingerprint under a scan line, which the site's design brief rules
+out (see §2), so the station shows a PIN instead.
 
 **Pinterest, "motion graphics video", and prompt-motion.com** (first pass). One statement per
 beat in large type, physical object motion, shape-driven transitions, duotone plus one accent.
