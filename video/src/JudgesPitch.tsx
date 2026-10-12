@@ -13,14 +13,14 @@ export function JudgesPitch() {
 
   return (
     <>
-      <Sequence from={0} durationInFrames={fps * 5}>
+      <Sequence from={0} durationInFrames={fps * 3}>
         <Intro />
       </Sequence>
-      <Sequence from={fps * 5} durationInFrames={fps * 12}>
+      <Sequence from={fps * 3} durationInFrames={fps * 10}>
         <Problem />
       </Sequence>
       {/* TODO: team / traction / ask scene — depends on STATUS.md item F (market doc). */}
-      <Sequence from={fps * 17} durationInFrames={fps * 75 - fps * 17}>
+      <Sequence from={fps * 13} durationInFrames={fps * 75 - fps * 13}>
         <Outro />
       </Sequence>
     </>

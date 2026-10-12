@@ -1,49 +1,701 @@
-import { interpolate, useCurrentFrame, useVideoConfig } from "remotion";
+import { CheckIcon, FingerprintIcon, GavelIcon, LockKeyIcon } from "@phosphor-icons/react";
+import type { CSSProperties } from "react";
+import { Easing, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
 import { colors, fonts } from "../theme";
-import { Label, Rule, Scene } from "./Scene";
+import { CLAMP, Caption, HeaderStrip, RedactBar, Stage, Stamp, pop } from "./stage";
 
-// Same five steps as the landing page's §3 Procedure diagram (apps/web/src/app/page.tsx).
-const STEPS = [
-  { title: "Passkey", sub: "The private key stays on the device" },
-  { title: "User verification", sub: "Biometric or PIN, checked by the device" },
-  { title: "Proof", sub: "Groth16: membership in the set, and a nullifier" },
-  { title: "JudgesVerifier on Monad", sub: "Checks the proof, consumes the nullifier" },
-  { title: "Application", sub: "DAO vote, agent registry, faucet" },
+const SPACING = 1300;
+const STATION_FRAMES = 90;
+const OVERVIEW_AT = 362;
+const VIGNETTE_X = 240;
+const VIGNETTE_SCALE = 1.3;
+const TRACK_Y = 350;
+const EASE = { ...CLAMP, easing: Easing.inOut(Easing.cubic) };
+
+// Notes are the sub-lines of the landing page's §3 Procedure diagram (apps/web/src/app/page.tsx).
+const STATIONS = [
+  { number: "01", title: "Passkey", note: "The private key stays on the device. Biometric or PIN, checked locally.", Vignette: PasskeyVignette },
+  { number: "02", title: "Proof", note: "Groth16: membership in the set, and a nullifier.", Vignette: ProofVignette },
+  { number: "03", title: "Chain", note: "JudgesVerifier checks the proof and consumes the nullifier.", Vignette: ChainVignette },
+  { number: "04", title: "Verdict", note: "One credential, one action per application.", Vignette: VerdictVignette },
 ];
 
-/** TODO: replace with real screen-recording of /demo once an identity is registered end-to-end. */
+/**
+ * Mechanism — 15s. One wide track with four illustrated stations; the camera travels station to
+ * station (3s each), then cuts to all four side by side. Replaces the row of four small icons,
+ * which was the same centred composition as every other scene.
+ */
 export function Procedure() {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+
+  const camX = interpolate(frame, [0, 78, 102, 168, 192, 258, 282], [0, 0, 1, 1, 2, 2, 3], EASE) * SPACING;
+  const zoom = interpolate(frame, [OVERVIEW_AT, OVERVIEW_AT + 12], [1, 0.9], EASE);
+  const worldOpacity = interpolate(frame, [OVERVIEW_AT, OVERVIEW_AT + 10], [1, 0], CLAMP);
+
+  const stops = STATIONS.map((_, i) => i * SPACING + VIGNETTE_X);
+  const tokenX = interpolate(frame, [0, 20, 62, 98, 152, 188, 242, 278], [-560, stops[0], stops[0], stops[1], stops[1], stops[2], stops[2], stops[3]], EASE);
+  const trackEnd = stops[3] + 320;
 
   return (
-    <Scene>
-      <Label>How it works</Label>
-      <Rule />
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-        {STEPS.map((step, i) => {
-          const start = i * fps * 0.9;
-          const opacity = interpolate(frame, [start, start + fps * 0.4], [0, 1], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          });
-          const x = interpolate(frame, [start, start + fps * 0.4], [-40, 0], {
-            extrapolateLeft: "clamp",
-            extrapolateRight: "clamp",
-          });
+    <Stage
+      push={0}
+      overlay={
+        <>
+          <HeaderStrip tone="paper" right="§ 3 — Procedure" />
+          <Caption
+            lines={[
+              { from: 4, text: "A passkey lives on your device. Biometric or PIN unlocks it." },
+              { from: 94, text: "It yields a zero-knowledge proof: a member of the set, not which one." },
+              { from: 184, text: "JudgesVerifier on Monad checks it and consumes a nullifier." },
+              { from: 274, text: "One credential, one action. Accepted." },
+              { from: OVERVIEW_AT + 8, text: "Four steps. Nothing else disclosed." },
+            ]}
+          />
+        </>
+      }
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          top: 0,
+          opacity: worldOpacity,
+          transformOrigin: "0 0",
+          transform: `translate(${960 - camX * zoom}px, 540px) scale(${zoom})`,
+        }}
+      >
+        <div style={{ position: "absolute", left: -560, top: TRACK_Y, width: trackEnd + 560, height: 1, background: colors.rule }} />
+        <div style={{ position: "absolute", left: -560, top: TRACK_Y - 1, width: tokenX + 560, height: 3, background: colors.ink }} />
+        {stops.map((x, i) => {
+          const reached = frame >= i * STATION_FRAMES + 20 || i === 0;
           return (
-            <div key={step.title} style={{ opacity, transform: `translateX(${x}px)`, display: "flex", gap: 24 }}>
-              <div style={{ fontFamily: fonts.mono, color: colors.muted, fontSize: 28, width: 60 }}>
-                {String(i + 1).padStart(2, "0")}
+            <div
+              key={x}
+              style={{
+                position: "absolute",
+                left: x - 11,
+                top: TRACK_Y - 11,
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                border: `3px solid ${colors.ink}`,
+                background: reached && tokenX >= x - 1 ? colors.ink : colors.paper,
+              }}
+            />
+          );
+        })}
+        <div
+          style={{
+            position: "absolute",
+            left: tokenX - 15,
+            top: TRACK_Y - 15,
+            width: 30,
+            height: 30,
+            borderRadius: "50%",
+            background: colors.ink,
+            boxShadow: `0 0 0 ${8 + Math.sin(frame / 5) * 3}px rgba(21, 19, 15, 0.12)`,
+          }}
+        />
+
+        {STATIONS.map((station, i) => {
+          const start = i * STATION_FRAMES;
+          const fadeIn = i === 0 ? 1 : interpolate(frame, [start - 14, start - 2], [0, 1], CLAMP);
+          const fadeOut = i === STATIONS.length - 1 ? 1 : interpolate(frame, [start + STATION_FRAMES - 10, start + STATION_FRAMES + 8], [1, 0], CLAMP);
+          return (
+            <div key={station.title} style={{ position: "absolute", left: i * SPACING, top: 0, opacity: Math.min(fadeIn, fadeOut) }}>
+              <div
+                style={{
+                  position: "absolute",
+                  left: -596,
+                  top: -372,
+                  fontFamily: fonts.mono,
+                  fontWeight: 700,
+                  fontSize: 380,
+                  lineHeight: 1,
+                  color: colors.ink,
+                  opacity: 0.055,
+                }}
+              >
+                {station.number}
               </div>
-              <div>
-                <div style={{ fontSize: 36 }}>{step.title}</div>
-                <div style={{ fontFamily: fonts.mono, fontSize: 20, color: colors.muted }}>{step.sub}</div>
+              <div style={{ position: "absolute", left: -560, top: -200, fontFamily: fonts.mono, fontSize: 26, color: colors.muted }}>
+                {station.number} / 04
+              </div>
+              <div style={{ position: "absolute", left: -564, top: -168, fontSize: 104, fontWeight: 600, lineHeight: 1.1, whiteSpace: "nowrap" }}>
+                {station.title}
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  left: -560,
+                  top: -30,
+                  width: 400,
+                  fontFamily: fonts.mono,
+                  fontSize: 23,
+                  lineHeight: 1.5,
+                  color: colors.muted,
+                }}
+              >
+                {station.note}
+              </div>
+              <div style={{ position: "absolute", left: VIGNETTE_X, top: -20, transformOrigin: "0 0", transform: `scale(${VIGNETTE_SCALE})` }}>
+                <station.Vignette start={start} />
               </div>
             </div>
           );
         })}
       </div>
-    </Scene>
+
+      <Summary />
+    </Stage>
+  );
+}
+
+const SUMMARY_COLUMNS = [
+  { x: 276, scale: 0.9 },
+  { x: 738, scale: 0.7 },
+  { x: 1200, scale: 0.7 },
+  { x: 1640, scale: 0.66 },
+];
+
+/** The four finished vignettes side by side — the whole procedure in one frame. */
+function Summary() {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  if (frame < OVERVIEW_AT) return null;
+
+  const line = interpolate(frame, [OVERVIEW_AT + 6, OVERVIEW_AT + 34], [0, 1], EASE);
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: 150,
+          top: 705,
+          width: 1620,
+          height: 3,
+          background: colors.ink,
+          transformOrigin: "left",
+          transform: `scaleX(${line})`,
+        }}
+      />
+      {STATIONS.map((station, i) => {
+        const column = SUMMARY_COLUMNS[i];
+        const at = OVERVIEW_AT + 8 + i * 6;
+        const enter = pop(frame, fps, at, { damping: 15, stiffness: 130, mass: 0.8 });
+        return (
+          <div key={station.title} style={{ opacity: interpolate(frame, [at, at + 6], [0, 1], CLAMP) }}>
+            <div
+              style={{
+                position: "absolute",
+                left: column.x,
+                top: 440,
+                transformOrigin: "0 0",
+                transform: `translateY(${(1 - enter) * 50}px) scale(${column.scale})`,
+              }}
+            >
+              <station.Vignette start={i * STATION_FRAMES} />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                left: column.x - 12,
+                top: 694,
+                width: 24,
+                height: 24,
+                boxSizing: "border-box",
+                borderRadius: "50%",
+                background: colors.ink,
+                border: `4px solid ${colors.paper}`,
+                transform: `scale(${enter})`,
+              }}
+            />
+            <div style={{ position: "absolute", left: column.x - 220, top: 736, width: 440, textAlign: "center" }}>
+              <div style={{ fontFamily: fonts.mono, fontSize: 22, color: colors.muted }}>{station.number}</div>
+              <div style={{ fontSize: 68, fontWeight: 600, lineHeight: 1.15 }}>{station.title}</div>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+type VignetteProps = { start: number };
+
+function PasskeyVignette({ start }: VignetteProps) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const t = frame - start;
+  const scan = interpolate(t, [12, 44], [0, 1], { ...CLAMP, easing: Easing.inOut(Easing.quad) });
+  const scanning = interpolate(t, [10, 13, 44, 47], [0, 1, 1, 0], CLAMP);
+  const verified = t >= 46;
+  const ring = interpolate(t, [46, 72], [0, 1], CLAMP);
+  const corner: CSSProperties = { position: "absolute", width: 28, height: 28, borderColor: colors.ink, borderStyle: "solid" };
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: -130,
+          top: -230,
+          width: 260,
+          height: 460,
+          borderRadius: 40,
+          border: `3px solid ${colors.ink}`,
+          opacity: verified ? (1 - ring) * 0.5 : 0,
+          transform: `scale(${1 + ring * 0.4})`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: -130,
+          top: -230,
+          width: 260,
+          height: 460,
+          boxSizing: "border-box",
+          borderRadius: 40,
+          border: `4px solid ${colors.ink}`,
+          background: colors.paperShade,
+          boxShadow: "0 26px 54px rgba(21, 19, 15, 0.2)",
+          transform: `scale(${pop(frame, fps, start, { damping: 14 })})`,
+        }}
+      >
+        <div style={{ position: "absolute", left: 91, top: 16, width: 70, height: 12, borderRadius: 6, background: colors.ink }} />
+
+        <div style={{ position: "absolute", left: 26, top: 96, width: 200, height: 200 }}>
+          <div style={{ ...corner, left: 0, top: 0, borderWidth: "3px 0 0 3px" }} />
+          <div style={{ ...corner, right: 0, top: 0, borderWidth: "3px 3px 0 0" }} />
+          <div style={{ ...corner, left: 0, bottom: 0, borderWidth: "0 0 3px 3px" }} />
+          <div style={{ ...corner, right: 0, bottom: 0, borderWidth: "0 3px 3px 0" }} />
+          <FingerprintIcon size={160} weight="light" color={colors.rule} style={{ position: "absolute", left: 20, top: 20 }} />
+          <div style={{ position: "absolute", left: 20, top: 20, width: 160, height: 160, clipPath: `inset(0 0 ${(1 - scan) * 100}% 0)` }}>
+            <FingerprintIcon size={160} weight="regular" color={colors.ink} />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              left: -4,
+              right: -4,
+              top: 20 + scan * 160 - 46,
+              height: 46,
+              opacity: scanning,
+              background: "linear-gradient(to top, rgba(21, 19, 15, 0.2), rgba(21, 19, 15, 0))",
+            }}
+          />
+          <div style={{ position: "absolute", left: -4, right: -4, top: 20 + scan * 160, height: 3, opacity: scanning, background: colors.ink }} />
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 318,
+            textAlign: "center",
+            fontFamily: fonts.mono,
+            fontSize: 17,
+            fontWeight: verified ? 600 : 400,
+            color: verified ? colors.ink : colors.muted,
+          }}
+        >
+          {verified ? "user verified" : "verifying…"}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 388,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 8,
+            fontFamily: fonts.mono,
+            fontSize: 13,
+            color: colors.muted,
+          }}
+        >
+          <LockKeyIcon size={20} weight="fill" color={colors.muted} />
+          key never leaves
+        </div>
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 92,
+          top: -262,
+          width: 68,
+          height: 68,
+          borderRadius: "50%",
+          background: colors.ink,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: `scale(${pop(frame, fps, start + 46)})`,
+        }}
+      >
+        <CheckIcon size={36} weight="bold" color={colors.paper} />
+      </div>
+    </>
+  );
+}
+
+const LEAVES = Array.from({ length: 8 }, (_, i) => ({ x: (i - 3.5) * 70, y: 170 }));
+const LEVEL_2 = Array.from({ length: 4 }, (_, i) => ({ x: (i - 1.5) * 140, y: 60 }));
+const LEVEL_1 = Array.from({ length: 2 }, (_, i) => ({ x: (i - 0.5) * 280, y: -50 }));
+const ROOT = { x: 0, y: -160 };
+const TREE_EDGES = [
+  ...LEAVES.map((leaf, i) => ({ from: leaf, to: LEVEL_2[Math.floor(i / 2)] })),
+  ...LEVEL_2.map((node, i) => ({ from: node, to: LEVEL_1[Math.floor(i / 2)] })),
+  ...LEVEL_1.map((node) => ({ from: node, to: ROOT })),
+];
+// The proven member's path to the root: leaf 5 → its parent → its grandparent → root.
+const MEMBER_PATH = [LEAVES[5], LEVEL_2[2], LEVEL_1[1], ROOT];
+const PATH_STEP = 10;
+const PATH_START = 12;
+
+function ProofVignette({ start }: VignetteProps) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const t = frame - start;
+  const grow = interpolate(t, [0, 10], [0, 1], CLAMP);
+  const onPath = (node: { x: number; y: number }) => MEMBER_PATH.indexOf(node);
+
+  return (
+    <>
+      <svg width={640} height={520} viewBox="-320 -260 640 520" style={{ position: "absolute", left: -320, top: -260, overflow: "visible" }}>
+        <g opacity={grow}>
+          {TREE_EDGES.map((edge, i) => (
+            <line key={i} x1={edge.from.x} y1={edge.from.y} x2={edge.to.x} y2={edge.to.y} stroke={colors.rule} strokeWidth={2} />
+          ))}
+        </g>
+        {MEMBER_PATH.slice(0, -1).map((node, i) => {
+          const next = MEMBER_PATH[i + 1];
+          const drawn = interpolate(t, [PATH_START + i * PATH_STEP, PATH_START + (i + 1) * PATH_STEP], [0, 1], CLAMP);
+          return (
+            <line
+              key={i}
+              x1={node.x}
+              y1={node.y}
+              x2={next.x}
+              y2={next.y}
+              stroke={colors.ink}
+              strokeWidth={5}
+              strokeLinecap="round"
+              pathLength={1}
+              strokeDasharray={1}
+              strokeDashoffset={1 - drawn}
+            />
+          );
+        })}
+        <g opacity={grow}>
+          {[...LEAVES, ...LEVEL_2, ...LEVEL_1, ROOT].map((node, i) => {
+            const step = onPath(node);
+            const lit = step >= 0 && t >= PATH_START + step * PATH_STEP;
+            const size = node === ROOT ? 44 : 30;
+            const scale = node === ROOT ? 1 + 0.25 * (1 - Math.min(1, Math.abs(t - (PATH_START + 3 * PATH_STEP + 4)) / 6)) : 1;
+            return (
+              <rect
+                key={i}
+                x={-size / 2}
+                y={-size / 2}
+                width={size}
+                height={size}
+                rx={6}
+                fill={lit ? colors.ink : colors.paper}
+                stroke={lit ? colors.ink : colors.rule}
+                strokeWidth={2.5}
+                transform={`translate(${node.x} ${node.y}) scale(${scale})`}
+              />
+            );
+          })}
+        </g>
+      </svg>
+
+      <div
+        style={{
+          position: "absolute",
+          left: -230,
+          top: ROOT.y - 13,
+          width: 190,
+          textAlign: "right",
+          fontFamily: fonts.mono,
+          fontSize: 17,
+          color: colors.muted,
+          opacity: interpolate(t, [40, 48], [0, 1], CLAMP),
+        }}
+      >
+        merkle root
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: 44,
+          top: ROOT.y - 27,
+          padding: "12px 22px",
+          borderRadius: 30,
+          background: colors.ink,
+          color: colors.paper,
+          fontFamily: fonts.mono,
+          fontSize: 22,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          transformOrigin: "left center",
+          transform: `scale(${pop(frame, fps, start + 54)})`,
+        }}
+      >
+        proof + nullifier
+      </div>
+
+      <RedactBar at={start + 50} width={552} height={46} style={{ left: -276, top: LEAVES[0].y - 23 }} />
+      <div
+        style={{
+          position: "absolute",
+          left: -320,
+          top: LEAVES[0].y + 38,
+          width: 640,
+          textAlign: "center",
+          fontFamily: fonts.mono,
+          fontSize: 18,
+          color: colors.muted,
+          opacity: interpolate(t, [58, 66], [0, 1], CLAMP),
+        }}
+      >
+        which member? undisclosed
+      </div>
+    </>
+  );
+}
+
+const BLOCKS = [
+  { x: -205, bars: [110, 84, 124, 60] },
+  { x: 0, bars: [96, 120, 70, 104] },
+  { x: 205, bars: [118, 66, 100, 88] },
+];
+const NULLIFIER = "0x9c41d7…e2f0";
+const LANDED = 40;
+
+function ChainVignette({ start }: VignetteProps) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const t = frame - start;
+  const fall = interpolate(t, [26, LANDED], [0, 1], { ...CLAMP, easing: Easing.in(Easing.quad) });
+  const flash = interpolate(t, [LANDED, LANDED + 18], [0, 1], CLAMP);
+  const typed = Math.max(0, Math.min(NULLIFIER.length, Math.floor((t - 46) * 1.2)));
+
+  return (
+    <>
+      <div
+        style={{
+          position: "absolute",
+          left: -320,
+          top: -222,
+          width: 640,
+          textAlign: "center",
+          fontFamily: fonts.mono,
+          fontSize: 18,
+          letterSpacing: "0.08em",
+          color: colors.muted,
+          opacity: interpolate(t, [2, 10], [0, 1], CLAMP),
+        }}
+      >
+        JUDGESVERIFIER · MONAD TESTNET
+      </div>
+
+      {[-102, 103].map((x, i) => (
+        <div
+          key={x}
+          style={{
+            position: "absolute",
+            left: x - 23,
+            top: -72,
+            width: 46,
+            height: 4,
+            background: colors.ink,
+            transformOrigin: "left",
+            transform: `scaleX(${interpolate(t, [20 + i * 6, 28 + i * 6], [0, 1], CLAMP)})`,
+          }}
+        />
+      ))}
+
+      {BLOCKS.map((block, i) => {
+        const pending = i === 2 && t < LANDED;
+        const slide = pop(frame, fps, start + 4 + i * 6, { damping: 15, stiffness: 130, mass: 0.8 });
+        return (
+          <div
+            key={block.x}
+            style={{
+              position: "absolute",
+              left: block.x - 80,
+              top: -150,
+              width: 160,
+              height: 160,
+              boxSizing: "border-box",
+              borderRadius: 16,
+              border: `3px ${pending ? "dashed" : "solid"} ${colors.ink}`,
+              background: colors.paperShade,
+              boxShadow: "0 16px 34px rgba(21, 19, 15, 0.14)",
+              opacity: interpolate(t, [4 + i * 6, 8 + i * 6], [0, 1], CLAMP),
+              transform: `translateX(${(1 - slide) * 300}px)`,
+            }}
+          >
+            <div style={{ position: "absolute", left: 16, top: 14, fontFamily: fonts.mono, fontSize: 14, color: colors.muted }}>
+              #4 820 11{5 + i}
+            </div>
+            {block.bars.map((width, row) => (
+              <div
+                key={row}
+                style={{
+                  position: "absolute",
+                  left: 16,
+                  top: 46 + row * 24,
+                  width,
+                  height: 9,
+                  background: colors.ink,
+                  opacity: pending ? 0 : i === 2 ? interpolate(t, [LANDED + row * 3, LANDED + 4 + row * 3], [0, 0.24], CLAMP) : 0.24,
+                }}
+              />
+            ))}
+          </div>
+        );
+      })}
+
+      <div
+        style={{
+          position: "absolute",
+          left: BLOCKS[2].x - 80,
+          top: -150,
+          width: 160,
+          height: 160,
+          boxSizing: "border-box",
+          borderRadius: 16,
+          border: `3px solid ${colors.ink}`,
+          opacity: t >= LANDED ? (1 - flash) * 0.6 : 0,
+          transform: `scale(${1 + flash * 0.4})`,
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          left: BLOCKS[2].x - 58,
+          top: interpolate(fall, [0, 1], [-330, -96]),
+          padding: "10px 22px",
+          borderRadius: 30,
+          background: colors.ink,
+          color: colors.paper,
+          fontFamily: fonts.mono,
+          fontSize: 22,
+          fontWeight: 600,
+          opacity: interpolate(t, [22, 26, LANDED - 1, LANDED + 3], [0, 1, 1, 0], CLAMP),
+          transform: `scale(${interpolate(fall, [0, 1], [1, 0.7])})`,
+        }}
+      >
+        proof
+      </div>
+      <div
+        style={{
+          position: "absolute",
+          left: BLOCKS[2].x + 50,
+          top: -178,
+          width: 56,
+          height: 56,
+          borderRadius: "50%",
+          background: colors.ink,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: `scale(${pop(frame, fps, start + LANDED + 2)})`,
+        }}
+      >
+        <CheckIcon size={30} weight="bold" color={colors.paper} />
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          left: -290,
+          top: 62,
+          width: 580,
+          height: 78,
+          boxSizing: "border-box",
+          border: `1px solid ${colors.ink}`,
+          background: colors.paper,
+          opacity: interpolate(t, [40, 46], [0, 1], CLAMP),
+        }}
+      >
+        <div style={{ position: "absolute", left: 20, top: 11, fontFamily: fonts.mono, fontSize: 14, letterSpacing: "0.12em", color: colors.muted }}>
+          NULLIFIER
+        </div>
+        <div style={{ position: "absolute", left: 20, top: 33, fontFamily: fonts.mono, fontSize: 27, fontWeight: 500 }}>
+          {NULLIFIER.slice(0, typed)}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            right: 16,
+            top: 20,
+            padding: "8px 14px",
+            background: colors.ink,
+            color: colors.paper,
+            fontFamily: fonts.mono,
+            fontSize: 17,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            transform: `scale(${pop(frame, fps, start + 64)})`,
+          }}
+        >
+          CONSUMED
+        </div>
+      </div>
+    </>
+  );
+}
+
+function VerdictVignette({ start }: VignetteProps) {
+  const frame = useCurrentFrame();
+  const t = frame - start;
+  const swing = interpolate(t, [4, 14, 26], [-42, 14, -6], { ...CLAMP, easing: Easing.inOut(Easing.quad) });
+
+  return (
+    <>
+      <GavelIcon
+        size={150}
+        weight="fill"
+        color={colors.ink}
+        style={{
+          position: "absolute",
+          left: -300,
+          top: -262,
+          opacity: interpolate(t, [0, 6], [0, 1], CLAMP),
+          transformOrigin: "85% 85%",
+          transform: `rotate(${swing}deg)`,
+        }}
+      />
+      <Stamp text="Accepted" sub="JudgesVerifier · Monad 10143" color={colors.ink} at={start + 16} size={84} rotate={-6} style={{ left: -262, top: -112 }} />
+
+      <div
+        style={{
+          position: "absolute",
+          left: -290,
+          top: 112,
+          width: 580,
+          paddingTop: 16,
+          borderTop: `1px solid ${colors.ink}`,
+          fontFamily: fonts.mono,
+          fontSize: 15,
+          letterSpacing: "0.12em",
+          color: colors.muted,
+          opacity: interpolate(t, [40, 48], [0, 1], CLAMP),
+        }}
+      >
+        ATTEMPT 2, SAME CREDENTIAL
+        <div style={{ marginTop: 8, fontSize: 17, letterSpacing: 0 }}>nullifier already used</div>
+      </div>
+      <Stamp text="Rejected" color={colors.accent} at={start + 52} size={32} rotate={-4} style={{ left: 60, top: 124 }} />
+    </>
   );
 }

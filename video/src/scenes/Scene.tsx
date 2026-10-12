@@ -1,25 +1,18 @@
 import type { ReactNode } from "react";
 import { AbsoluteFill } from "remotion";
 import { colors, fonts } from "../theme";
+import { BACKGROUND, Grain } from "./stage";
 
 /**
- * Shared full-bleed paper background + base type for every scene, so individual scenes only
- * describe their own content and timing, not the page chrome.
+ * Plain full-bleed frame for the scenes that are still simple cards (Verdict, Outro). Shares the
+ * lit background and grain of `Stage` so they do not look flat next to the motion scenes.
  */
 export function Scene({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
+  const tone = dark ? "ink" : "paper";
   return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: dark ? colors.ink : colors.paper,
-        color: dark ? colors.paper : colors.ink,
-        fontFamily: fonts.serif,
-        padding: 96,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "center",
-      }}
-    >
-      {children}
+    <AbsoluteFill style={{ background: BACKGROUND[tone], color: dark ? colors.paper : colors.ink, fontFamily: fonts.serif }}>
+      <AbsoluteFill style={{ padding: 96, display: "flex", flexDirection: "column", justifyContent: "center" }}>{children}</AbsoluteFill>
+      <Grain tone={tone} />
     </AbsoluteFill>
   );
 }
@@ -39,8 +32,4 @@ export function Label({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
-}
-
-export function Rule() {
-  return <div style={{ height: 1, background: colors.rule, margin: "32px 0" }} />;
 }

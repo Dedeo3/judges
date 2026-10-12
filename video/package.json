@@ -6,9 +6,11 @@
     "start": "remotion studio src/index.ts",
     "build": "remotion render src/index.ts JudgesDemo out/judges-demo.mp4",
     "still": "remotion still src/index.ts JudgesDemo out/judges-demo.png",
+    "contact": "remotion still src/dev/index.tsx Contact out/contact.png",
     "upgrade": "remotion upgrade"
   },
   "dependencies": {
+    "@phosphor-icons/react": "2.1.10",
     "@remotion/cli": "4.0.534",
     "@remotion/google-fonts": "4.0.534",
     "react": "19.2.8",
