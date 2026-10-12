@@ -10,6 +10,7 @@ import { Verdict } from "@/components/Verdict";
 import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
 import { proveMembershipInBrowser, registerIdentity } from "@/lib/proveBrowser";
 
+type Section = "passkey" | "identity" | "prove";
 type Status = { kind: "idle" } | { kind: "success"; message: string } | { kind: "error"; message: string };
 
 export default function DemoPage() {
@@ -19,6 +20,7 @@ export default function DemoPage() {
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
   const [busy, setBusy] = useState(false);
+  const [at, setAt] = useState<Section>("passkey");
   const connectWallet = useConnectJudgesWallet();
 
   const signIdentityMessage = (message: string) => {
@@ -27,6 +29,7 @@ export default function DemoPage() {
   };
 
   async function handleRegisterPasskey() {
+    setAt("passkey");
     setBusy(true);
     setStatus({ kind: "idle" });
     try {
@@ -56,6 +59,7 @@ export default function DemoPage() {
   }
 
   async function handleConnectWallet() {
+    setAt("identity");
     try {
       const connected = await connectWallet();
       setAccount(connected.account);
@@ -67,6 +71,7 @@ export default function DemoPage() {
   }
 
   async function handleRegisterIdentity() {
+    setAt("identity");
     if (!account) {
       setStatus({ kind: "error", message: "Connect a wallet first — your identity secret is derived from its signature." });
       return;
@@ -91,6 +96,7 @@ export default function DemoPage() {
   }
 
   async function handleTestProve() {
+    setAt("prove");
     if (!account) {
       setStatus({ kind: "error", message: "Connect a wallet first — proofs are bound to one wallet." });
       return;
@@ -125,6 +131,23 @@ export default function DemoPage() {
     }
   }
 
+  const outcome = (section: Section) => (
+    <div role="status" aria-live="polite">
+      {at === section && busy && <Working>Working. Follow the prompts from your device and wallet.</Working>}
+      {at === section && status.kind === "success" && (
+        <div className="stack">
+          <Verdict status="accepted" />
+          <p style={{ overflowWrap: "anywhere" }}>{status.message}</p>
+        </div>
+      )}
+      {at === section && status.kind === "error" && (
+        <p className="error" style={{ overflowWrap: "anywhere" }}>
+          {status.message}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <SiteFrame>
       <article className="sec sec--flush">
@@ -154,6 +177,7 @@ export default function DemoPage() {
               Register with passkey
             </button>
           </div>
+          {outcome("passkey")}
 
           <h2>2. Identity</h2>
           <div className="stack">
@@ -164,6 +188,7 @@ export default function DemoPage() {
               Sign identity message and register (passkey-gated)
             </button>
           </div>
+          {outcome("identity")}
 
           <h2>Test a proof</h2>
           <p>
@@ -179,6 +204,7 @@ export default function DemoPage() {
               Generate a proof (ZK, in-browser)
             </button>
           </div>
+          {outcome("prove")}
 
           <h2>Demo integrations</h2>
           <p>Three apps, one flow, three separate nullifier domains. Acting in one does not spend your turn in another.</p>
@@ -194,20 +220,6 @@ export default function DemoPage() {
             </li>
           </ul>
 
-          <div role="status" aria-live="polite">
-            {busy && <Working>Working. Follow the prompts from your device and wallet.</Working>}
-            {status.kind === "success" && (
-              <div className="stack">
-                <Verdict status="accepted" />
-                <p style={{ overflowWrap: "anywhere" }}>{status.message}</p>
-              </div>
-            )}
-            {status.kind === "error" && (
-              <p className="error" style={{ overflowWrap: "anywhere" }}>
-                {status.message}
-              </p>
-            )}
-          </div>
         </div>
       </article>
     </SiteFrame>
