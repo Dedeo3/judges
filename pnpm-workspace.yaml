@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "prover"
+  - "video"
 allowBuilds:
   '@reown/appkit': true
   bufferutil: true
