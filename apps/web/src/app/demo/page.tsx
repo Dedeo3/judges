@@ -7,7 +7,7 @@ import { Marginalia } from "@/components/Document";
 import { Working } from "@/components/Progress";
 import { SiteFrame } from "@/components/SiteFrame";
 import { Verdict } from "@/components/Verdict";
-import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
+import { useConnectJudgesWallet, useDisconnectJudgesWallet } from "@/lib/judgesWalletContext";
 import { proveMembershipInBrowser, registerIdentity } from "@/lib/proveBrowser";
 
 type Section = "passkey" | "identity" | "prove";
@@ -22,6 +22,7 @@ export default function DemoPage() {
   const [busy, setBusy] = useState(false);
   const [at, setAt] = useState<Section>("passkey");
   const connectWallet = useConnectJudgesWallet();
+  const disconnectWallet = useDisconnectJudgesWallet();
 
   const signIdentityMessage = (message: string) => {
     if (!account || !walletClient) throw new Error("connect a wallet first");
@@ -68,6 +69,13 @@ export default function DemoPage() {
     } catch (err) {
       setStatus({ kind: "error", message: err instanceof Error ? err.message : "Wallet connection failed" });
     }
+  }
+
+  async function handleDisconnect() {
+    await disconnectWallet();
+    setAccount(null);
+    setWalletClient(null);
+    setStatus({ kind: "idle" });
   }
 
   async function handleRegisterIdentity() {
@@ -181,9 +189,16 @@ export default function DemoPage() {
 
           <h2>2. Identity</h2>
           <div className="stack">
-            <button className="btn" onClick={handleConnectWallet} disabled={busy}>
-              {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
-            </button>
+            <div className="btn-pair">
+              <button className="btn" onClick={handleConnectWallet} disabled={busy}>
+                {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
+              </button>
+              {account && (
+                <button className="btn" onClick={handleDisconnect} disabled={busy}>
+                  Disconnect
+                </button>
+              )}
+            </div>
             <button className="btn" onClick={handleRegisterIdentity} disabled={busy || !account}>
               Sign identity message and register (passkey-gated)
             </button>

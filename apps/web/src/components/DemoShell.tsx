@@ -6,7 +6,7 @@ import type { Address, WalletClient } from "viem";
 import { judgesVerifierAbi } from "@/lib/abis";
 import { addresses, explorerTxUrl, missingConfigReason, type APP_IDS } from "@/lib/judgesConfig";
 import { proveMembershipInBrowser } from "@/lib/proveBrowser";
-import { useConnectJudgesWallet } from "@/lib/judgesWalletContext";
+import { useConnectJudgesWallet, useDisconnectJudgesWallet } from "@/lib/judgesWalletContext";
 import { publicClient } from "@/lib/wallet";
 import { Marginalia } from "./Document";
 import { Steps } from "./Progress";
@@ -80,6 +80,7 @@ export function DemoShell({
   const [walletClient, setWalletClient] = useState<WalletClient | null>(null);
   const [status, setStatus] = useState<DemoStatus>({ kind: "idle" });
   const connectWallet = useConnectJudgesWallet();
+  const disconnectWallet = useDisconnectJudgesWallet();
 
   const notConfigured = missingConfigReason(demo);
   const busy = status.kind === "busy";
@@ -94,6 +95,13 @@ export function DemoShell({
       setStatus({ kind: "error", message: err instanceof Error ? err.message : "Wallet connection failed" });
     }
   }, [connectWallet]);
+
+  const handleDisconnect = useCallback(async () => {
+    await disconnectWallet();
+    setAccount(null);
+    setWalletClient(null);
+    setStatus({ kind: "idle" });
+  }, [disconnectWallet]);
 
   const handleRun = useCallback(async () => {
     if (!account || !walletClient) return;
@@ -179,9 +187,16 @@ export function DemoShell({
           )}
 
           <div className="stack">
-            <button className="btn" onClick={handleConnect} disabled={busy}>
-              {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
-            </button>
+            <div className="btn-pair">
+              <button className="btn" onClick={handleConnect} disabled={busy}>
+                {account ? `Connected: ${account.slice(0, 6)}…${account.slice(-4)}` : "Connect wallet"}
+              </button>
+              {account && (
+                <button className="btn" onClick={handleDisconnect} disabled={busy}>
+                  Disconnect
+                </button>
+              )}
+            </div>
 
             {children}
 

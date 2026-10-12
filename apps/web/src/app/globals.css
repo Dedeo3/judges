@@ -487,6 +487,12 @@ input[type="checkbox"] {
   justify-items: start;
 }
 
+.btn-pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 /* ── Verdict panel, ledger, stamp ──────────────────────────────────────── */
 
 .panel {

@@ -4,8 +4,10 @@ import { createContext, useContext, type ReactNode } from "react";
 import type { ConnectedWalletResult } from "./wallet";
 
 export type ConnectFn = () => Promise<ConnectedWalletResult>;
+export type DisconnectFn = () => Promise<void>;
+type WalletActions = { connect: ConnectFn; disconnect: DisconnectFn };
 
-const JudgesWalletContext = createContext<ConnectFn | null>(null);
+const JudgesWalletContext = createContext<WalletActions | null>(null);
 
 /**
  * What every demo page actually calls. Reads from context rather than calling Privy's own
@@ -18,20 +20,26 @@ const JudgesWalletContext = createContext<ConnectFn | null>(null);
  * than erroring, if it isn't).
  */
 export function useConnectJudgesWallet(): ConnectFn {
-  const connect = useContext(JudgesWalletContext);
+  const actions = useContext(JudgesWalletContext);
   return (
-    connect ??
+    actions?.connect ??
     (() => Promise.reject(new Error("Wallet connect isn't configured (NEXT_PUBLIC_PRIVY_APP_ID is missing)")))
   );
 }
 
-export function JudgesWalletContextProvider({ value, children }: { value: ConnectFn; children: ReactNode }) {
+export function useDisconnectJudgesWallet(): DisconnectFn {
+  return useContext(JudgesWalletContext)?.disconnect ?? (() => Promise.resolve());
+}
+
+export function JudgesWalletContextProvider({ value, children }: { value: WalletActions; children: ReactNode }) {
   return <JudgesWalletContext.Provider value={value}>{children}</JudgesWalletContext.Provider>;
 }
 
 /** Mounted instead of `PrivyWalletBridge` when `NEXT_PUBLIC_PRIVY_APP_ID` isn't set. */
 export function StubWalletBridge({ children }: { children: ReactNode }) {
-  const connect: ConnectFn = () =>
-    Promise.reject(new Error("Wallet connect isn't configured (NEXT_PUBLIC_PRIVY_APP_ID is missing)"));
-  return <JudgesWalletContextProvider value={connect}>{children}</JudgesWalletContextProvider>;
+  const value: WalletActions = {
+    connect: () => Promise.reject(new Error("Wallet connect isn't configured (NEXT_PUBLIC_PRIVY_APP_ID is missing)")),
+    disconnect: () => Promise.resolve(),
+  };
+  return <JudgesWalletContextProvider value={value}>{children}</JudgesWalletContextProvider>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useRef, type ReactNode } from "react";
-import { useConnectWallet } from "@privy-io/react-auth";
+import { useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useConnectWallet, useWallets } from "@privy-io/react-auth";
 import type { Address } from "viem";
 import { chain } from "./judgesConfig";
 import { JudgesWalletContextProvider } from "./judgesWalletContext";
@@ -74,7 +74,15 @@ export function PrivyWalletBridge({ children }: { children: ReactNode }) {
     });
   }, [connectWallet]);
 
-  return <JudgesWalletContextProvider value={connect}>{children}</JudgesWalletContextProvider>;
+  // Injected wallets (MetaMask, Rabby) may ignore a programmatic disconnect, so callers also drop
+  // their own copy of the account; the next connect() re-reads whichever account the wallet has selected.
+  const { wallets } = useWallets();
+  const disconnect = useCallback(async () => {
+    await Promise.allSettled(wallets.map(async (wallet) => wallet.disconnect()));
+  }, [wallets]);
+
+  const value = useMemo(() => ({ connect, disconnect }), [connect, disconnect]);
+  return <JudgesWalletContextProvider value={value}>{children}</JudgesWalletContextProvider>;
 }
 
 function privyConnectErrorMessage(error: unknown): string {
